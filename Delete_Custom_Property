@@ -1,0 +1,36 @@
+Option Explicit
+Sub main()
+
+Dim swApp As SldWorks.SldWorks
+Dim swModel As SldWorks.ModelDoc2
+Dim swConfiguration As SldWorks.Configuration
+Dim swCustomPropertyManager As SldWorks.CustomPropertyManager
+
+Dim strPropertyName As String
+Dim varConfigurations As Variant
+Dim intIndex As Integer
+Dim strConfigurationName As String
+
+Set swApp = Application.SldWorks
+Set swModel = swApp.ActiveDoc()
+
+strPropertyName = InputBox("Property Name?", "Delete")
+
+varConfigurations = swModel.GetConfigurationNames()
+For intIndex = 1 To UBound(varConfigurations)
+    strConfigurationName = varConfigurations(intIndex)
+    Set swConfiguration = swModel.GetConfigurationByName(strConfigurationName)
+    Set swCustomPropertyManager = swConfiguration.CustomPropertyManager()
+    
+    Call swCustomPropertyManager.Delete2(strPropertyName)
+Next
+
+Call MsgBox("Done!", , "Delete")
+
+Set swApp = Nothing
+Set swModel = Nothing
+Set swConfiguration = Nothing
+Set swCustomPropertyManager = Nothing
+
+End Sub
+
