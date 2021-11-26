@@ -1,0 +1,142 @@
+Option Explicit
+
+Dim swApp As SldWorks.SldWorks
+Dim swModel As SldWorks.ModelDoc2
+Dim swModelExtension As SldWorks.ModelDocExtension
+
+Sub main()
+
+Dim swBOMFeature As SldWorks.BomFeature
+Dim swBOMTable As SldWorks.TableAnnotation
+
+Dim varBOMTables As Variant
+Dim strBOMTemplate As String
+
+Set swApp = Application.SldWorks
+Set swModel = swApp.ActiveDoc()
+Set swModelExtension = swModel.Extension()
+
+Set swBOMFeature = FindBOMFeature()
+If Not swBOMFeature Is Nothing Then
+    varBOMTables = swBOMFeature.GetTableAnnotations()
+    Set swBOMTable = varBOMTables(0)
+Else
+    strBOMTemplate = "Z:\Libraries & Templates\Standard Parts Library\BOM.sldbomtbt"
+    Set swBOMTable = swModelExtension.InsertBomTable3(strBOMTemplate, 0, 0, SwConst.swBomType_e.swBomType_PartsOnly, "Default", True, 0, False)
+End If
+
+Call swModel.ForceRebuild3(False)
+
+Call Export(swBOMTable)
+
+Call MsgBox("Export was successful", vbOKOnly, "Done")
+
+End Sub
+
+Function FindBOMFeature() As SldWorks.BomFeature
+
+Dim swFeature As SldWorks.Feature
+
+swModel.ForceRebuild3 (False)
+
+Set swFeature = swModel.FirstFeature()
+
+Do While Not swFeature Is Nothing
+    If swFeature.GetTypeName2 = "TableFolder" Then
+        Set swFeature = swFeature.GetFirstSubFeature()
+        Do While Not swFeature Is Nothing
+            If swFeature.GetTypeName2 = "BomFeat" Then
+                Set FindBOMFeature = swFeature.GetSpecificFeature2()
+                Set swFeature = Nothing
+                Exit Function
+            End If
+            Set swFeature = swFeature.GetNextSubFeature()
+        Loop
+    Else
+        Set swFeature = swFeature.GetNextFeature()
+    End If
+Loop
+
+Set swFeature = Nothing
+
+End Function
+
+Sub Export(swBOMTable As SldWorks.TableAnnotation)
+
+Dim xlApp As Excel.Application
+Dim xlWorkbook As Excel.Workbook
+Dim xlWorksheet As Excel.Worksheet
+Dim xlCell As Excel.Range
+
+Dim strFileName As String
+Dim intColumnIndex As Integer
+Dim intRowIndex As Integer
+
+Set xlApp = CreateObject("Excel.Application")
+
+xlApp.DisplayAlerts = False
+
+Set xlWorkbook = xlApp.Workbooks.Add(Excel.XlWBATemplate.xlWBATWorksheet)
+strFileName = swApp.GetCurrentWorkingDirectory() & "BOM.xlsx"
+xlWorkbook.SaveAs (strFileName)
+
+Set xlWorksheet = xlWorkbook.Worksheets("Sheet1")
+
+For intColumnIndex = 0 To swBOMTable.ColumnCount() - 1
+    'Debug.Print (swBOMTable.GetColumnTitle(intColumnIndex))
+    xlWorksheet.Cells(1, intColumnIndex + 1) = swBOMTable.GetColumnTitle(intColumnIndex)
+    
+    For intRowIndex = 1 To swBOMTable.RowCount() - 1
+        'Debug.Print (swBOMTable.Text(intRowIndex, intColumnIndex))
+        xlWorksheet.Cells(intRowIndex + 1, intColumnIndex + 1) = swBOMTable.Text(intRowIndex, intColumnIndex)
+    Next
+Next
+
+Call FormatExcel(xlWorksheet)
+
+xlWorkbook.Save
+xlWorkbook.Close
+
+Set xlApp = Nothing
+Set xlWorkbook = Nothing
+Set xlWorksheet = Nothing
+Set xlCell = Nothing
+
+
+
+End Sub
+
+Sub FormatExcel(xlWorksheet As Excel.Worksheet)
+
+Call xlWorksheet.Range("A1").AutoFilter
+
+xlWorksheet.Columns(1).ColumnWidth = 10
+xlWorksheet.Columns(2).ColumnWidth = 50
+xlWorksheet.Columns(3).ColumnWidth = 20
+xlWorksheet.Columns(4).ColumnWidth = 20
+xlWorksheet.Columns(5).ColumnWidth = 10
+xlWorksheet.Columns(6).ColumnWidth = 50
+xlWorksheet.Columns(7).ColumnWidth = 10
+xlWorksheet.Columns(8).ColumnWidth = 10
+xlWorksheet.Columns(9).ColumnWidth = 5
+
+xlWorksheet.Rows("1:1000").RowHeight = 20
+
+xlWorksheet.Columns("A:D").HorizontalAlignment = xlHAlignLeft
+xlWorksheet.Columns("E").HorizontalAlignment = xlHAlignCenter
+xlWorksheet.Columns("F:G").HorizontalAlignment = xlHAlignLeft
+xlWorksheet.Columns("H:I").HorizontalAlignment = xlHAlignRight
+
+xlWorksheet.Rows(1).HorizontalAlignment = xlHAlignCenter
+
+xlWorksheet.Rows(1).Font.Bold = True
+
+xlWorksheet.PageSetup.PrintArea = "A:I"
+xlWorksheet.PageSetup.Orientation = xlLandscape
+xlWorksheet.PageSetup.Zoom = False
+xlWorksheet.PageSetup.FitToPagesWide = 1
+xlWorksheet.PageSetup.FitToPagesTall = 1
+xlWorksheet.PageSetup.PrintGridlines = True
+xlWorksheet.PageSetup.CenterHorizontally = True
+
+End Sub
