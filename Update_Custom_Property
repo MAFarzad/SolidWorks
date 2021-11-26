@@ -1,0 +1,41 @@
+Option Explicit
+Sub main()
+
+Dim swApp As SldWorks.SldWorks
+Dim swModel As SldWorks.ModelDoc2
+Dim swConfiguration As SldWorks.Configuration
+Dim swCustomPropertyManager As SldWorks.CustomPropertyManager
+
+Dim strTitle As String
+Dim varConfigurations As Variant
+Dim intIndex As Integer
+Dim strConfigurationName As String
+Dim strPropertyValue As String
+
+Set swApp = Application.SldWorks
+Set swModel = swApp.ActiveDoc()
+
+strTitle = swModel.GetTitle()
+
+varConfigurations = swModel.GetConfigurationNames()
+For intIndex = 1 To UBound(varConfigurations)
+    strConfigurationName = varConfigurations(intIndex)
+    Set swConfiguration = swModel.GetConfigurationByName(strConfigurationName)
+    Set swCustomPropertyManager = swConfiguration.CustomPropertyManager()
+    
+    strPropertyValue = Chr(34) & "SW-Material@@" & strConfigurationName & "@" & strTitle & ".SLDPRT" & Chr(34)
+    Call swCustomPropertyManager.Add3("Material", SwConst.swCustomInfoType_e.swCustomInfoText, strPropertyValue, SwConst.swCustomPropertyAddOption_e.swCustomPropertyReplaceValue)
+    
+    strPropertyValue = Chr(34) & "SW-Mass@@" & strConfigurationName & "@" & strTitle & ".SLDPRT" & Chr(34)
+    Call swCustomPropertyManager.Add3("Weight", SwConst.swCustomInfoType_e.swCustomInfoText, strPropertyValue, SwConst.swCustomPropertyAddOption_e.swCustomPropertyReplaceValue)
+
+Next
+
+Call MsgBox("Done!", , "Update")
+
+Set swApp = Nothing
+Set swModel = Nothing
+Set swConfiguration = Nothing
+Set swCustomPropertyManager = Nothing
+
+End Sub
