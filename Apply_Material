@@ -1,0 +1,37 @@
+Option Explicit
+
+Dim swApp As SldWorks.SldWorks
+Dim swModel As SldWorks.ModelDoc2
+Dim swModelDocExt As SldWorks.ModelDocExtension
+Dim swPart As SldWorks.PartDoc
+
+Dim strTitle As String
+Dim strFileName As String
+Dim lErrors As Long
+Dim lWarnings As Long
+Dim boolStatus As Boolean
+
+Sub main()
+
+Set swApp = Application.SldWorks
+Set swModel = swApp.GetFirstDocument
+
+While Not swModel Is Nothing
+    strTitle = swModel.GetTitle()
+    strFileName = "C:\Users\farzad\Downloads\" & strTitle & ".SLDPRT"
+    Set swModelDocExt = swModel.Extension
+    boolStatus = swModelDocExt.SaveAs(strFileName, SwConst.swSaveAsVersion_e.swSaveAsCurrentVersion, SwConst.swSaveAsOptions_e.swSaveAsOptions_Silent, Nothing, lErrors, lWarnings)
+    If boolStatus Then
+        Set swPart = swModel
+        Call swPart.RemoveAllDisplayStates
+        Call swPart.SetMaterialPropertyName2("Default", "", "AISI 304")
+        Call swModel.Save3(SwConst.swSaveAsOptions_e.swSaveAsOptions_Silent, lErrors, lWarnings)
+    Else
+        Call MsgBox(strFileName, , "Saving Error")
+    End If
+    Set swModel = swModel.GetNext
+Wend
+
+Call swApp.CloseAllDocuments(False)
+
+End Sub
