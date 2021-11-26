@@ -1,0 +1,53 @@
+Option Explicit
+
+Dim swApp As SldWorks.SldWorks
+Dim swModel As SldWorks.ModelDoc2
+Dim swAssembly As SldWorks.AssemblyDoc
+Dim swComponents As Variant
+Dim swComponent As SldWorks.Component2
+Dim swModelDocExt As SldWorks.ModelDocExtension
+
+Dim intCount1 As Integer
+Dim strFullName As String
+Dim strPathSplit() As String
+Dim strPath As String
+Dim strComponentName As String
+Dim strName As String
+Dim lErrors As Long
+Dim lWarnings As Long
+
+Sub main()
+
+Set swApp = Application.SldWorks
+Set swModel = swApp.ActiveDoc()
+Set swModelDocExt = swModel.Extension
+Set swAssembly = swModel
+
+strFullName = swModel.GetPathName()
+strPathSplit = Split(strFullName, "\")
+strPathSplit(UBound(strPathSplit)) = ""
+strPath = Join(strPathSplit, "\")
+
+
+swComponents = swAssembly.GetComponents(True)
+
+strName = ""
+For intCount1 = 0 To UBound(swComponents)
+    Call swAssembly.SetComponentState(SwConst.swComponentSuppressionState_e.swComponentSuppressed, swComponents, SwConst.swInConfigurationOpts_e.swThisConfiguration, "", False)
+
+    Set swComponent = swComponents(intCount1)
+    
+    swComponent.SetSuppression2 (SwConst.swComponentSuppressionState_e.swComponentResolved)
+    
+    strComponentName = swComponent.Name2()
+    strName = InputBox(strComponentName, "New Name?", strName)
+    strFullName = strPath & strName & ".SLDPRT"
+    
+    
+    Call swModelDocExt.SaveAs(strFullName, SwConst.swSaveAsVersion_e.swSaveAsCurrentVersion, SwConst.swSaveAsOptions_e.swSaveAsOptions_Silent, Nothing, lErrors, lWarnings)
+Next
+
+Call swApp.CloseAllDocuments(False)
+
+
+End Sub
