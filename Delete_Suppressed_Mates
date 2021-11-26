@@ -1,0 +1,57 @@
+Option Explicit
+
+Dim swApp As SldWorks.SldWorks
+
+Sub main()
+
+Dim swModel As SldWorks.ModelDoc2
+Dim swModelDocExt As SldWorks.ModelDocExtension
+Dim swFeature As SldWorks.Feature
+Dim swMateFeature As SldWorks.Feature
+Dim swSuppressStateArray As Variant
+Dim swMate As SldWorks.Mate2
+Dim swMateEntity As SldWorks.MateEntity2
+Dim swMateReference As Variant
+
+Dim booSelectionFlag As Boolean
+Dim intIndex As Integer
+
+
+Set swApp = Application.SldWorks
+Set swModel = swApp.ActiveDoc()
+Set swModelDocExt = swModel.Extension
+
+Set swFeature = swModel.FirstFeature()
+Do While Not swFeature Is Nothing
+    If swFeature.Name() = "Mates" Then
+        Set swMateFeature = swFeature.GetFirstSubFeature
+        Do While Not swMateFeature Is Nothing
+            swSuppressStateArray = swMateFeature.IsSuppressed2(SwConst.swInConfigurationOpts_e.swAllConfiguration, "")
+        
+            If swSuppressStateArray(0) Then
+                booSelectionFlag = swModelDocExt.SelectByID2(swMateFeature.Name, "MATE", 0, 0, 0, False, 0, Nothing, SwConst.swSelectOption_e.swSelectOptionDefault)
+            Else
+                Set swMate = swMateFeature.GetSpecificFeature2()
+                For intIndex = 0 To swMate.GetMateEntityCount() - 1
+                    Set swMateEntity = swMate.MateEntity(intIndex)
+                    Set swMateReference = swMateEntity.Reference()
+                    If swMateReference Is Nothing Then
+                        booSelectionFlag = swModelDocExt.SelectByID2(swMateFeature.Name, "MATE", 0, 0, 0, False, 0, Nothing, SwConst.swSelectOption_e.swSelectOptionDefault)
+                        Exit For
+                    End If
+                Next
+            End If
+            
+            Set swMateFeature = swMateFeature.GetNextSubFeature()
+            
+            If booSelectionFlag Then
+                Call swModelDocExt.DeleteSelection2(SwConst.swDeleteSelectionOptions_e.swDelete_Absorbed)
+                booSelectionFlag = False
+            End If
+        Loop
+    End If
+    
+    Set swFeature = swFeature.GetNextFeature()
+Loop
+
+End Sub
