@@ -1,0 +1,80 @@
+Option Explicit
+
+Dim swApp As SldWorks.SldWorks
+Dim swModel As SldWorks.ModelDoc2
+Dim swModelDocExt As SldWorks.ModelDocExtension
+Dim swPart As SldWorks.PartDoc
+Dim swFeature As SldWorks.Feature
+Dim swConfigurationManager As SldWorks.ConfigurationManager
+Dim swConfiguration As SldWorks.Configuration
+Dim swCustomPropertyManager As SldWorks.CustomPropertyManager
+
+Dim strTitle As String
+Dim intConfigurationCount As Integer
+Dim intCount As Integer
+Dim strConfigurationName As String
+Dim strConfigurationDescription As String
+Dim strConfigurationWeight As String
+Dim strConfigurationMaterial As String
+Dim lErrors As Long
+Dim lWarnings As Long
+
+Sub main()
+
+Set swApp = Application.SldWorks
+Set swModel = swApp.GetFirstDocument
+
+intConfigurationCount = 1
+strConfigurationName = "Default"
+Do While Not swModel Is Nothing
+    strTitle = swModel.GetTitle()
+    
+    Set swModelDocExt = swModel.Extension
+    Set swPart = swModel
+        
+    Call swPart.RemoveAllDisplayStates
+    Call swPart.SetMaterialPropertyName2("Default", "", "AISI 304")
+    
+    Set swFeature = swPart.FirstFeature()
+    Do While Not swFeature Is Nothing
+        If swFeature.GetTypeName2() = "BaseBody" Then
+            swFeature.Name = "Body"
+            Exit Do
+        End If
+        Set swFeature = swFeature.GetNextFeature()
+    Loop
+    
+    Set swCustomPropertyManager = swModelDocExt.CustomPropertyManager("")
+    Call swCustomPropertyManager.Delete2("Weight")
+    Call swCustomPropertyManager.Delete2("Material")
+    
+    intConfigurationCount = Val(InputBox("How Many Configurations?", strTitle, intConfigurationCount))
+    Set swConfigurationManager = swModel.ConfigurationManager()
+    For intCount = 1 To intConfigurationCount
+        strConfigurationName = InputBox("Name for #" & intCount & " Configuration?", strTitle, strConfigurationName)
+        
+        If intCount = 1 Then
+            Set swConfiguration = swConfigurationManager.ActiveConfiguration()
+            swConfiguration.Name = strConfigurationName
+        Else
+            Set swConfiguration = swConfigurationManager.AddConfiguration(strConfigurationName, "", "", 0, "", "")
+        End If
+        Set swCustomPropertyManager = swConfiguration.CustomPropertyManager()
+        
+        strConfigurationDescription = InputBox("Description for " & strConfigurationName & "?", strTitle, strConfigurationDescription)
+        Call swCustomPropertyManager.Set2("Description", strConfigurationDescription)
+        
+        strConfigurationMaterial = Chr(34) & "SW-Material@@" & strConfigurationName & "@" & strTitle & ".SLDPRT" & Chr(34)
+        Call swCustomPropertyManager.Add3("Material", SwConst.swCustomInfoType_e.swCustomInfoText, strConfigurationMaterial, SwConst.swCustomPropertyAddOption_e.swCustomPropertyReplaceValue)
+        
+        strConfigurationWeight = Chr(34) & "SW-Mass@@" & strConfigurationName & "@" & strTitle & ".SLDPRT" & Chr(34)
+        Call swCustomPropertyManager.Add3("Weight", SwConst.swCustomInfoType_e.swCustomInfoText, strConfigurationWeight, SwConst.swCustomPropertyAddOption_e.swCustomPropertyReplaceValue)
+    Next
+    
+    Call swModel.Save3(SwConst.swSaveAsOptions_e.swSaveAsOptions_Silent, lErrors, lWarnings)
+    
+    Set swModel = swModel.GetNext
+Loop
+
+
+End Sub

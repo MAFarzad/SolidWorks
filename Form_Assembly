@@ -1,0 +1,124 @@
+Option Explicit
+
+Dim swApp As SldWorks.SldWorks
+Dim swModel As SldWorks.ModelDoc2
+Dim swModelDocExt As SldWorks.ModelDocExtension
+Dim swAssembly As SldWorks.AssemblyDoc
+Dim swComponent As SldWorks.Component2
+Dim swSelection As SldWorks.SelectionMgr
+Dim swSelectData As SldWorks.SelectData
+Dim swMate As SldWorks.Mate2
+Dim swObject As Object
+Dim swComponents As Variant
+
+
+Dim strTemplate As String
+Dim boolStatus As Boolean
+Dim strFileName() As String
+Dim intCount1 As Integer
+Dim intCount12 As Integer
+
+
+Sub main()
+
+Set swApp = Application.SldWorks
+
+strFileName = OpenParts(swApp)
+
+strTemplate = swApp.GetUserPreferenceStringValue(SwConst.swUserPreferenceStringValue_e.swDefaultTemplateAssembly)
+Set swModel = swApp.INewDocument2(strTemplate, 0, 0, 0)
+
+Set swModelDocExt = swModel.Extension
+boolStatus = swModelDocExt.SelectByID2("Front Plane", "PLANE", 0, 0, 0, False, 1, Nothing, SwConst.swSelectOption_e.swSelectOptionDefault)
+boolStatus = swModelDocExt.SelectByID2("Right Plane", "PLANE", 0, 0, 0, True, 2, Nothing, SwConst.swSelectOption_e.swSelectOptionDefault)
+boolStatus = swModel.InsertAxis2(True)
+
+Set swAssembly = swModel
+Set swSelection = swModel.SelectionManager()
+Set swSelectData = swSelection.CreateSelectData()
+For intCount1 = 0 To UBound(strFileName)
+    Set swComponent = swAssembly.AddComponent5(strFileName(intCount1), SwConst.swAddComponentConfigOptions_e.swAddComponentConfigOptions_CurrentSelectedConfig, "", False, "", 0, 0, 0)
+    
+    Call swComponent.Select4(False, swSelectData, False)
+    Call swAssembly.UnfixComponent
+    
+    While swObject Is Nothing
+        If swSelection.GetSelectedObjectType3(1, -1) = SwConst.swSelectType_e.swSelDATUMPLANES Then
+                Set swObject = swSelection.GetSelectedObject6(1, -1)
+        End If
+        DoEvents
+    Wend
+    Set swObject = Nothing
+    boolStatus = swModelDocExt.SelectByID2("Front Plane", "PLANE", 0, 0, 0, True, 1, Nothing, SwConst.swSelectOption_e.swSelectOptionDefault)
+    Call swAssembly.AddMate5(SwConst.swMateType_e.swMateCOINCIDENT, SwConst.swMateAlign_e.swMateAlignALIGNED, False, 0, 0, 0, 0, 0, 0, 0, 0, False, False, 0, 0)
+    Call swModel.ClearSelection2(True)
+    
+    While swObject Is Nothing
+        If swSelection.GetSelectedObjectType3(1, -1) = SwConst.swSelectType_e.swSelFACES Then
+                Set swObject = swSelection.GetSelectedObject6(1, -1)
+        End If
+        DoEvents
+    Wend
+    Set swObject = Nothing
+    boolStatus = swModelDocExt.SelectByID2("Top Plane", "PLANE", 0, 0, 0, True, 1, Nothing, SwConst.swSelectOption_e.swSelectOptionDefault)
+    Call swAssembly.AddMate5(SwConst.swMateType_e.swMateCOINCIDENT, SwConst.swMateAlign_e.swMateAlignANTI_ALIGNED, False, 0, 0, 0, 0, 0, 0, 0, 0, False, False, 0, 0)
+    Call swModel.ClearSelection2(True)
+    
+    While swObject Is Nothing
+        If swSelection.GetSelectedObjectType3(1, -1) = SwConst.swSelectType_e.swSelFACES Then
+                Set swObject = swSelection.GetSelectedObject6(1, -1)
+        End If
+        DoEvents
+    Wend
+    Set swObject = Nothing
+    boolStatus = swModelDocExt.SelectByID2("Axis1", "AXIS", 0, 0, 0, True, 1, Nothing, SwConst.swSelectOption_e.swSelectOptionDefault)
+    Call swAssembly.AddMate5(SwConst.swMateType_e.swMateCONCENTRIC, SwConst.swMateAlign_e.swMateAlignALIGNED, True, 0, 0, 0, 0, 0, 0, 0, 0, False, False, 0, 0)
+    Call swModel.ClearSelection2(True)
+    
+    Call swComponent.SetVisibility(SwConst.swComponentVisibilityState_e.swComponentHidden, SwConst.swInConfigurationOpts_e.swThisConfiguration, "")
+    
+Next
+
+
+swComponents = swAssembly.GetComponents(True)
+For intCount1 = 0 To UBound(swComponents)
+    Set swComponent = swComponents(intCount1)
+    Call swComponent.SetVisibility(SwConst.swComponentVisibilityState_e.swComponentVisible, SwConst.swInConfigurationOpts_e.swThisConfiguration, "")
+Next
+
+Call swModel.ShowNamedView2("", SwConst.swStandardViews_e.swIsometricView)
+Call swModel.ViewZoomtofit2
+Call swModel.ForceRebuild3(True)
+    
+    
+
+
+
+
+
+
+End Sub
+
+Function OpenParts(swApp As SldWorks.SldWorks) As String()
+
+Dim swModel As SldWorks.ModelDoc2
+
+Dim intCounter As Integer
+Dim strReturn() As String
+
+Set swModel = swApp.GetFirstDocument
+
+intCounter = 0
+While Not swModel Is Nothing
+    ReDim Preserve strReturn(intCounter)
+    strReturn(intCounter) = swModel.GetTitle()
+    
+    Set swModel = swModel.GetNext
+    intCounter = intCounter + 1
+Wend
+
+OpenParts = strReturn
+
+Set swModel = Nothing
+
+End Function

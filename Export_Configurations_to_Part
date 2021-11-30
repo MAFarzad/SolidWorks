@@ -1,0 +1,190 @@
+Option Explicit
+
+Dim swApp As SldWorks.SldWorks
+
+Function GetActiveBodies(swAssembly As SldWorks.AssemblyDoc) As SldWorks.Body2()
+
+Dim swComponents As Variant
+Dim swComponent As SldWorks.Component2
+Dim swBody As SldWorks.Body2
+Dim swBodies(1) As SldWorks.Body2
+
+Dim intIndex As Integer
+Dim intCounter As Integer
+
+swComponents = swAssembly.GetComponents(True)
+
+intCounter = 0
+For intIndex = 0 To UBound(swComponents)
+    Set swComponent = swComponents(intIndex)
+    
+    If swComponent.GetSuppression() = SwConst.swComponentSuppressionState_e.swComponentFullyResolved Then
+        Set swBody = swComponent.GetBody()
+        Set swBodies(intCounter) = swBody.Copy()
+        intCounter = intCounter + 1
+    End If
+Next
+
+GetActiveBodies = swBodies
+
+End Function
+
+Sub RenameBody(swPart As SldWorks.PartDoc, Name As String)
+
+Dim swFeature As SldWorks.Feature
+
+Set swFeature = swPart.FirstFeature()
+
+Do While Not swFeature Is Nothing
+    If swFeature.GetTypeName2() = "BaseBody" Then
+        swFeature.Name = Name
+        Exit Do
+    End If
+    Set swFeature = swFeature.GetNextFeature()
+Loop
+
+End Sub
+
+Sub main()
+
+Dim swModel As SldWorks.ModelDoc2
+Dim swModelDocExt As SldWorks.ModelDocExtension
+Dim swAssembly As SldWorks.AssemblyDoc
+Dim swConfigurationManager As SldWorks.ConfigurationManager
+Dim swConfiguration As SldWorks.Configuration
+Dim swBodies() As SldWorks.Body2
+Dim swCombinedBody As Variant
+Dim swBody As SldWorks.Body2
+
+Dim strPath As String
+Dim strConfigurationNames() As String
+Dim strConfigurationName As String
+Dim strPartName As String
+Dim intIndex As Integer
+Dim strPartFullName As String
+Dim lngError As Long
+
+
+Set swApp = Application.SldWorks
+
+Set swModel = swApp.ActiveDoc()
+Set swModelDocExt = swModel.Extension()
+Set swAssembly = swModel
+Set swConfigurationManager = swModel.ConfigurationManager()
+
+strPath = GetPath(swModel.GetPathName())
+
+strPartName = ""
+strConfigurationNames = swModel.GetConfigurationNames()
+For intIndex = 0 To UBound(strConfigurationNames)
+    strConfigurationName = strConfigurationNames(intIndex)
+    
+    Call swModel.ShowConfiguration2(strConfigurationName)
+    
+    swBodies = GetActiveBodies(swAssembly)
+    swCombinedBody = swBodies(0).Operations2(SwConst.swBodyOperationType_e.SWBODYADD, swBodies(1), lngError)
+    
+    If Not IsEmpty(swCombinedBody) Then
+        strPartName = InputBox("New Name?", strConfigurationName, strPartName)
+        strPartFullName = strPath & strPartName & ".SLDPRT"
+        
+        Set swBody = swCombinedBody(0)
+        Call ExportBodyToPart(swBody, strPartFullName)
+    
+    Else
+        Call MsgBox(strConfigurationName, vbOKOnly, "Error")
+    End If
+    
+Next
+
+End Sub
+
+Function GetPath(strPathName As String) As String
+
+Dim strPathSplit() As String
+
+strPathSplit = Split(strPathName, "\")
+strPathSplit(UBound(strPathSplit)) = ""
+GetPath = Join(strPathSplit, "\")
+
+End Function
+
+Sub ExportBodyToPart(swBody As SldWorks.Body2, strFullName As String)
+
+Dim swModel As SldWorks.ModelDoc2
+Dim swModelDocExt As SldWorks.ModelDocExtension
+Dim swPart As SldWorks.PartDoc
+Dim swFeature As SldWorks.Feature
+
+Dim strTemplate As String
+Dim lngError As Long
+Dim lngWarning As Long
+
+strTemplate = swApp.GetUserPreferenceStringValue(SwConst.swUserPreferenceStringValue_e.swDefaultTemplatePart)
+
+Set swModel = swApp.NewDocument(strTemplate, 0, 0, 0)
+Set swModelDocExt = swModel.Extension()
+Set swPart = swModel
+        
+Set swFeature = swPart.CreateFeatureFromBody3(swBody, False, SwConst.swCreateFeatureBodyOpts_e.swCreateFeatureBodyCheck + SwConst.swCreateFeatureBodyOpts_e.swCreateFeatureBodySimplify)
+        
+Call swModelDocExt.SaveAs(strFullName, SwConst.swSaveAsVersion_e.swSaveAsCurrentVersion, SwConst.swSaveAsOptions_e.swSaveAsOptions_Silent, Nothing, lngError, lngWarning)
+
+Call MakeConfigurations(swModel)
+
+Call swModel.Save3(SwConst.swSaveAsOptions_e.swSaveAsOptions_Silent, lngError, lngWarning)
+
+End Sub
+
+Sub MakeConfigurations(swModel As SldWorks.ModelDoc2)
+
+Dim swModelDocExt As SldWorks.ModelDocExtension
+Dim swPart As SldWorks.PartDoc
+Dim swCustomPropertyManager As SldWorks.CustomPropertyManager
+Dim swConfigurationManager As SldWorks.ConfigurationManager
+Dim swConfiguration As SldWorks.Configuration
+
+Dim strTitle As String
+Dim intConfigurationCount As Integer
+Dim intIndex As Integer
+Dim strConfigurationName As String
+Dim strConfigurationDescription As String
+Dim strConfigurationNote As String
+
+strTitle = swModel.GetTitle()
+    
+Set swModelDocExt = swModel.Extension
+Set swPart = swModel
+        
+Call swPart.RemoveAllDisplayStates
+Call swPart.SetMaterialPropertyName2("Default", "", "AISI 304")
+    
+Call RenameBody(swPart, "Body")
+           
+intConfigurationCount = Val(InputBox("How Many Configurations?", strTitle, intConfigurationCount))
+Set swConfigurationManager = swModel.ConfigurationManager()
+For intIndex = 1 To intConfigurationCount
+    strConfigurationName = InputBox("Name for #" & intIndex & " Configuration?", strTitle, strConfigurationName)
+        
+    If intIndex = 1 Then
+        Set swConfiguration = swConfigurationManager.ActiveConfiguration()
+        swConfiguration.Name = strConfigurationName
+    Else
+        Set swConfiguration = swConfigurationManager.AddConfiguration(strConfigurationName, "", "", 0, "", "")
+    End If
+    
+        Set swCustomPropertyManager = swConfiguration.CustomPropertyManager()
+        
+        strConfigurationDescription = InputBox("Description for " & strConfigurationName & "?", strTitle, strConfigurationDescription)
+        Call swCustomPropertyManager.Set2("Description", strConfigurationDescription)
+        
+        strConfigurationNote = InputBox("Note for " & strConfigurationName & "?", strTitle, strConfigurationNote)
+        Call swCustomPropertyManager.Set2("Note", strConfigurationNote)
+        
+    Next
+    
+End Sub
+
+
+
+
