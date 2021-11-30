@@ -1,3 +1,3 @@
 # SolidWorks
 
-Codes for automating SolidWorks.
+Codes for automating SolidWorks
