@@ -7,9 +7,12 @@ Dim swPart As SldWorks.PartDoc
 Dim xlApp As Excel.Application
 
 
-Function Export(strDWGFile) As Boolean
-
+Function Export(strDirectory As String, strName As String) As Boolean
+ 
+Dim strDWGFile As String
 Dim dblAlignment(11) As Double
+
+strDWGFile = strDirectory & "\" & strName & ".dwg"
 
 dblAlignment(0) = 0
 dblAlignment(1) = 0
@@ -24,52 +27,54 @@ dblAlignment(9) = 0
 dblAlignment(10) = 0
 dblAlignment(11) = 1
 
-
+Call swApp.RunCommand(SwCommands.swCommands_NormalTo, "")
 Export = swPart.ExportToDWG2(strDWGFile, swModel.GetPathName, SwConst.swExportToDWG_e.swExportToDWG_ExportSelectedFacesOrLoops, True, dblAlignment, False, False, 0, Null)
 
 
 End Function
 
-Function GetExportFolder(strWorkingFolder As String) As String
+Function GetExportFolder() As String
 
-Dim ofFileDialog As Office.FileDialog
-
+Dim strDirectory As String
+Dim strDirectoryArray() As String
+Dim strProject As String
 Dim strExportFolder As String
 
-strExportFolder = GetSetting("Solidworks Macros", "ExportToDWG", "ExportFolder")
+
+strDirectory = swApp.GetCurrentWorkingDirectory()
+strDirectoryArray = Split(strDirectory, "\")
+strProject = Left(strDirectoryArray(2), 9)
+
+strExportFolder = GetSetting("Solidworks Macros", "ExportToDWG", "strProject")
 If strExportFolder = "" Then
-    strExportFolder = strWorkingFolder
-End If
-
-Set ofFileDialog = xlApp.FileDialog(msoFileDialogFolderPicker)
-ofFileDialog.InitialFileName = strExportFolder
-ofFileDialog.Title = "Export to ..."
-If ofFileDialog.Show = -1 Then
-    GetExportFolder = CStr(ofFileDialog.SelectedItems(1))
-Else
-    GetExportFolder = strExportFolder
-End If
-
-Call SaveSetting("Solidworks Macros", "ExportToDWG", "ExportFolder", GetExportFolder)
+    strExportFolder = strDirectoryArray(0) & "\" & strDirectoryArray(1) & "\" & strDirectoryArray(2) & "\" & strDirectoryArray(3) & "\" & strDirectoryArray(4) & "\CBR Laser"
     
-Set ofFileDialog = Nothing
+    If Dir(strExportFolder, vbDirectory) = "" Then
+        Call MkDir(strExportFolder)
+    End If
+    
+    Call SaveSetting("Solidworks Macros", "ExportToDWG", "strProject", strExportFolder)
+End If
+
+GetExportFolder = strExportFolder
 
 End Function
 
 Sub main()
-
 
 Dim swModelExtension As SldWorks.ModelDocExtension
 Dim swSelectionManager As SldWorks.SelectionMgr
 
 Dim strDirectory As String
 Dim strName As String
-Dim strMaterialDetails As String
-Dim strMaterialDetailsArray() As String
+Dim strExcelFile As String
+
+
+
 Dim strMaterial As String
 Dim dblThickness As Double
-Dim strDWGFile As String
-Dim strExcelFile As String
+
+
 Dim bolExport As Boolean
 
 Set swApp = Application.SldWorks
@@ -80,26 +85,18 @@ Set swSelectionManager = swModel.SelectionManager()
 
 If swSelectionManager.GetSelectedObjectCount2(0) = 1 And swSelectionManager.GetSelectedObjectType3(1, 0) = SwConst.swSelectType_e.swSelFACES Then
     If swModel.LengthUnit = SwConst.swLengthUnit_e.swINCHES Then
-        Call swApp.RunCommand(SwCommands.swCommands_NormalTo, "")
-    
-        strDirectory = swApp.GetCurrentWorkingDirectory()
-        strName = InputBox("Name?", , swModel.GetTitle())
-    
-        strMaterialDetails = swPart.MaterialIdName()
-        strMaterialDetailsArray = Split(strMaterialDetails, "|")
-        strMaterial = strMaterialDetailsArray(1)
-    
-        dblThickness = FindThickness()
-            
-        Set xlApp = CreateObject("Excel.Application")
-        strDirectory = GetExportFolder(swApp.GetCurrentWorkingDirectory())
-    
-        strDWGFile = strDirectory & "\" & strName & ".dwg"
-        bolExport = Export(strDWGFile)
+         
+        strDirectory = GetExportFolder()
+        strName = GetName()
+        
+        bolExport = Export(strDirectory, strName)
         If bolExport Then
             strExcelFile = CheckExcelFileExist(strDirectory)
+            
+            strMaterial = GetMaterial()
+            dblThickness = FindThickness()
+            
             Call UpdateExcel(strExcelFile, strName, strMaterial, dblThickness)
-            Set xlApp = Nothing
             
             Call MsgBox("Export was successful", vbOKOnly, "Done")
         End If
@@ -111,6 +108,28 @@ Else
 End If
 
 End Sub
+
+Function GetName() As String
+
+Dim strNameComplete As String
+Dim strNameCompleteArray() As String
+
+
+strNameComplete = swModel.GetTitle()
+strNameCompleteArray = Split(strNameComplete, ".")
+GetName = InputBox("Name?", , strNameCompleteArray(0))
+        
+End Function
+Function GetMaterial() As String
+
+Dim strMaterialDetails As String
+Dim strMaterialDetailsArray() As String
+
+strMaterialDetails = swPart.MaterialIdName()
+strMaterialDetailsArray = Split(strMaterialDetails, "|")
+GetMaterial = strMaterialDetailsArray(1)
+        
+End Function
 
 
 Function CheckExcelFileExist(strDirectory As String) As String
@@ -147,7 +166,7 @@ Do While Not swFeature Is Nothing
     
     strType = swFeature.GetTypeName2
      
-    If swFeature.GetTypeName2 = "Extrusion" Then
+    If swFeature.GetTypeName2 = "Extrusion" Or swFeature.GetTypeName2 = "ExtruThin" Then
         Set swExtrude = swFeature.GetDefinition()
         FindThickness = (swExtrude.GetDepth(True) + swExtrude.GetDepth(False)) / 0.0254
         
@@ -181,8 +200,12 @@ Dim xlCell As Excel.Range
 
 Dim lngRow As Long
 
+Set xlApp = CreateObject("Excel.Application")
+
 Set xlWorkbook = xlApp.Workbooks.Open(strFilePath)
 Set xlWorksheet = xlWorkbook.Worksheets("Sheet1")
+
+Call xlApp.Wait(Now + TimeValue("0:00:02"))
 
 For Each xlCell In xlWorksheet.Columns(1).Cells
     If IsEmpty(xlCell) Then
@@ -207,8 +230,6 @@ Call xlWorkbook.Close
 Set xlWorkbook = Nothing
 Set xlWorksheet = Nothing
 Set xlCell = Nothing
-
+Set xlApp = Nothing
 
 End Sub
-
-
