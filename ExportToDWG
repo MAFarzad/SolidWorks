@@ -41,7 +41,7 @@ Dim strProject As String
 Dim strExportFolder As String
 
 
-strDirectory = swApp.GetCurrentWorkingDirectory()
+strDirectory = swModel.GetPathName()
 strDirectoryArray = Split(strDirectory, "\")
 strProject = Left(strDirectoryArray(2), 9)
 
