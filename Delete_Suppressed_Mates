@@ -1,57 +1,93 @@
 Option Explicit
 
 Dim swApp As SldWorks.SldWorks
+Dim swModel As SldWorks.ModelDoc2
+Dim swModelDocExt As SldWorks.ModelDocExtension
 
 Sub main()
 
-Dim swModel As SldWorks.ModelDoc2
-Dim swModelDocExt As SldWorks.ModelDocExtension
 Dim swFeature As SldWorks.Feature
 Dim swMateFeature As SldWorks.Feature
-Dim swSuppressStateArray As Variant
+Dim swChosenMatesFeature() As SldWorks.Feature
 Dim swMate As SldWorks.Mate2
 Dim swMateEntity As SldWorks.MateEntity2
-Dim swMateReference As Variant
 
-Dim booSelectionFlag As Boolean
-Dim intIndex As Integer
+Dim intDeleteSuppressed As Integer
+Dim intDeleteDangling As Integer
+Dim bolSuppressStateArray() As Boolean
+Dim bolSelectionFlag As Boolean
+Dim intUpperBound As Integer
+Dim intCounter As Integer
 
+intDeleteSuppressed = MsgBox("Delete Suppressed Mates?", vbYesNo, "Delete")
+intDeleteDangling = MsgBox("Delete Dangling Mates?", vbYesNo, "Delete")
 
 Set swApp = Application.SldWorks
 Set swModel = swApp.ActiveDoc()
 Set swModelDocExt = swModel.Extension
 
+Set swFeature = FindFeature("MateGroup")
+
+Set swMateFeature = swFeature.GetFirstSubFeature
+Do While Not swMateFeature Is Nothing
+    Debug.Print (swMateFeature.Name())
+    
+    If intDeleteSuppressed = vbYes Then
+        bolSuppressStateArray = swMateFeature.IsSuppressed2(SwConst.swInConfigurationOpts_e.swAllConfiguration, "")
+        'Debug.Print (ANDArray(bolSuppressStateArray))
+        
+        If ANDArray(bolSuppressStateArray) Then
+            Call swModelDocExt.SelectByID2(swMateFeature.Name, "MATE", 0, 0, 0, True, 0, Nothing, SwConst.swSelectOption_e.swSelectOptionDefault)
+        End If
+    End If
+    
+    If intDeleteDangling = vbYes Then
+        Set swMate = swMateFeature.GetSpecificFeature2()
+        For intCounter = 0 To swMate.GetMateEntityCount - 1
+            Set swMateEntity = swMate.MateEntity(intCounter)
+            If swMateEntity.Reference() Is Nothing Then
+                Debug.Print ("Dangling")
+                Call swModelDocExt.SelectByID2(swMateFeature.Name, "MATE", 0, 0, 0, True, 0, Nothing, SwConst.swSelectOption_e.swSelectOptionDefault)
+                Exit For
+            End If
+        Next
+    End If
+        
+    Set swMateFeature = swMateFeature.GetNextSubFeature()
+Loop
+
+Call swModelDocExt.DeleteSelection2(SwConst.swDeleteSelectionOptions_e.swDelete_Absorbed)
+
+
+End Sub
+
+Function FindFeature(strFeatureName As String) As SldWorks.Feature
+
+Dim swFeature As SldWorks.Feature
+
 Set swFeature = swModel.FirstFeature()
 Do While Not swFeature Is Nothing
-    If swFeature.Name() = "Mates" Then
-        Set swMateFeature = swFeature.GetFirstSubFeature
-        Do While Not swMateFeature Is Nothing
-            swSuppressStateArray = swMateFeature.IsSuppressed2(SwConst.swInConfigurationOpts_e.swAllConfiguration, "")
-        
-            If swSuppressStateArray(0) Then
-                booSelectionFlag = swModelDocExt.SelectByID2(swMateFeature.Name, "MATE", 0, 0, 0, False, 0, Nothing, SwConst.swSelectOption_e.swSelectOptionDefault)
-            Else
-                Set swMate = swMateFeature.GetSpecificFeature2()
-                For intIndex = 0 To swMate.GetMateEntityCount() - 1
-                    Set swMateEntity = swMate.MateEntity(intIndex)
-                    Set swMateReference = swMateEntity.Reference()
-                    If swMateReference Is Nothing Then
-                        booSelectionFlag = swModelDocExt.SelectByID2(swMateFeature.Name, "MATE", 0, 0, 0, False, 0, Nothing, SwConst.swSelectOption_e.swSelectOptionDefault)
-                        Exit For
-                    End If
-                Next
-            End If
-            
-            Set swMateFeature = swMateFeature.GetNextSubFeature()
-            
-            If booSelectionFlag Then
-                Call swModelDocExt.DeleteSelection2(SwConst.swDeleteSelectionOptions_e.swDelete_Absorbed)
-                booSelectionFlag = False
-            End If
-        Loop
+    'Debug.Print (swFeature.GetTypeName2())
+    If swFeature.GetTypeName2 = strFeatureName Then
+        Set FindFeature = swFeature
+        Exit Function
     End If
     
     Set swFeature = swFeature.GetNextFeature()
 Loop
 
-End Sub
+Set FindFeature = Nothing
+
+End Function
+
+Function ANDArray(bolArray() As Boolean) As Boolean
+
+Dim intCounter As Integer
+
+ANDArray = bolArray(0)
+For intCounter = 1 To UBound(bolArray)
+    ANDArray = ANDArray And bolArray(intCounter)
+    intCounter = intCounter + 1
+Next
+
+End Function
