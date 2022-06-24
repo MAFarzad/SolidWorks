@@ -1,0 +1,132 @@
+Option Explicit
+
+Dim swApp As SldWorks.SldWorks
+Dim swModel As SldWorks.ModelDoc2
+
+Dim fsoFSO As Scripting.FileSystemObject
+
+Dim colFilesAvailable As Collection
+Dim colFilesUsed As Collection
+Dim colFilesRedundant As Collection
+
+
+Sub main()
+
+Dim strMainPath As String
+Dim fsoFolder As Scripting.Folder
+Dim varFileAvailable As Variant
+Dim varFileRedundant As Variant
+Dim strReport As String
+Dim intDelete As Integer
+
+Set swApp = Application.SldWorks
+Set swModel = swApp.ActiveDoc()
+
+Set fsoFSO = New Scripting.FileSystemObject
+
+strMainPath = swModel.GetPathName()
+
+Set colFilesUsed = New Collection
+colFilesUsed.Add (strMainPath)
+Call FindFilesInAssembly
+
+Set fsoFolder = fsoFSO.GetFolder(fsoFSO.GetParentFolderName(strMainPath))
+'Debug.Print (fsoFolder.Path)
+
+Set colFilesAvailable = New Collection
+Call FindFilesInFolders(fsoFolder)
+
+Set colFilesRedundant = New Collection
+For Each varFileAvailable In colFilesAvailable
+    If Not CheckExist(varFileAvailable, colFilesUsed) Then
+        colFilesRedundant.Add (varFileAvailable)
+        'Debug.Print (varFileAvailable)
+    End If
+Next
+
+strReport = "There are " & colFilesRedundant.Count & " redundant files:" & vbCrLf
+For Each varFileRedundant In colFilesRedundant
+    strReport = strReport & varFileRedundant & vbCrLf
+    Debug.Print (strReport)
+Next
+strReport = strReport & "Do you want to delete them?"
+intDelete = MsgBox(strReport, vbYesNo, "Delete!")
+If intDelete = vbYes Then
+    For Each varFileRedundant In colFilesRedundant
+        fsoFSO.DeleteFile (varFileRedundant)
+    Next
+    Call MsgBox("Done", vbOKOnly, "Delete!")
+End If
+    
+End Sub
+
+
+Sub FindFilesInFolder(fsoFolder As Scripting.Folder)
+
+Dim fsoFile As Scripting.File
+Dim strFileType As String
+
+
+For Each fsoFile In fsoFolder.Files
+    If fsoFile.Attributes <> Hidden Then
+        strFileType = fsoFile.Type
+        If (strFileType = "SOLIDWORKS Assembly Document") Or (strFileType = "SOLIDWORKS Part Document") Then
+            'Debug.Print (fsoFile.Name)
+            colFilesAvailable.Add (fsoFile.Path)
+        End If
+    End If
+Next
+
+End Sub
+Sub FindFilesInFolders(fsoFolder As Scripting.Folder)
+
+Dim fsoSubFolder As Scripting.Folder
+
+
+If InStr(LCase(fsoFolder.Name), "old") <> 0 Then
+    Exit Sub
+End If
+
+'Debug.Print (fsoFolder.Name)
+
+Call FindFilesInFolder(fsoFolder)
+
+For Each fsoSubFolder In fsoFolder.SubFolders
+    Call FindFilesInFolders(fsoSubFolder)
+Next
+
+End Sub
+Sub FindFilesInAssembly()
+
+Dim strDependents() As String
+Dim intDependentsCount As Integer
+Dim intCount As Integer
+
+colFilesUsed.Add (swModel.GetPathName)
+
+
+strDependents = swModel.GetDependencies2(True, True, False)
+intDependentsCount = (UBound(strDependents) - 1) / 2
+
+For intCount = 0 To intDependentsCount
+    colFilesUsed.Add (strDependents(intCount * 2 + 1))
+Next
+
+End Sub
+
+Function CheckExist(varKey As Variant, colItems As Collection) As Boolean
+
+Dim varItem As Variant
+
+
+CheckExist = False
+
+For Each varItem In colItems
+    If varKey = varItem Then
+        CheckExist = True
+        Exit Function
+    End If
+Next
+    
+End Function
+
