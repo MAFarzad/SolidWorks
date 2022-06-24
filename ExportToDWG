@@ -45,9 +45,13 @@ strDirectory = swModel.GetPathName()
 strDirectoryArray = Split(strDirectory, "\")
 strProject = Left(strDirectoryArray(2), 9)
 
+strProject = InputBox("Project name?", "Project", strProject)
+
 strExportFolder = GetSetting("Solidworks Macros", "ExportToDWG", strProject)
 If strExportFolder = "" Then
     strExportFolder = strDirectoryArray(0) & "\" & strDirectoryArray(1) & "\" & strDirectoryArray(2) & "\" & strDirectoryArray(3) & "\" & strDirectoryArray(4) & "\CBR Laser"
+    
+    strExportFolder = InputBox("Project folder?", "Project", strExportFolder)
     
     If Dir(strExportFolder, vbDirectory) = "" Then
         Call MkDir(strExportFolder)
@@ -69,8 +73,7 @@ Dim strDirectory As String
 Dim strName As String
 Dim bolExport As Boolean
 Dim strExcelFile As String
-Dim strMaterial As String
-Dim dblThickness As Double
+
 
 Set swApp = Application.SldWorks
 Set swModel = swApp.ActiveDoc()
@@ -87,11 +90,8 @@ If swSelectionManager.GetSelectedObjectCount2(0) = 1 And swSelectionManager.GetS
         bolExport = Export(strDirectory, strName)
         If bolExport Then
             strExcelFile = CheckExcelFileExist(strDirectory)
-            
-            strMaterial = GetMaterial()
-            dblThickness = FindThickness()
-            
-            Call UpdateExcel(strExcelFile, strName, strMaterial, dblThickness)
+   
+            Call UpdateExcel(strExcelFile, strName, GetMaterial(), FindThickness())
             
             Call MsgBox("Export was successful", vbOKOnly, "Done")
         End If
@@ -146,7 +146,7 @@ End Function
 
 
 
-Function FindThickness() As Double
+Function FindThickness() As String
 
 Dim swFeature As SldWorks.Feature
 Dim swExtrude As SldWorks.ExtrudeFeatureData2
@@ -157,13 +157,14 @@ Dim strType As String
 Set swFeature = swPart.FirstFeature
 
 Do While Not swFeature Is Nothing
-    Debug.Print (swFeature.Name & " : " & swFeature.GetTypeName2)
+    'Debug.Print (swFeature.Name & " : " & swFeature.GetTypeName2)
     
     strType = swFeature.GetTypeName2
      
     If swFeature.GetTypeName2 = "Extrusion" Or swFeature.GetTypeName2 = "ExtruThin" Then
         Set swExtrude = swFeature.GetDefinition()
         FindThickness = (swExtrude.GetDepth(True) + swExtrude.GetDepth(False)) / 0.0254
+        FindThickness = InputBox("Check Thickness", "Thickness", FindThickness)
         
         Set swFeature = Nothing
         Set swExtrude = Nothing
@@ -172,6 +173,7 @@ Do While Not swFeature Is Nothing
     ElseIf swFeature.GetTypeName2 = "SheetMetal" Then
         Set swSheetMetal = swFeature.GetDefinition()
         FindThickness = swSheetMetal.Thickness() / 0.0254
+        FindThickness = InputBox("Check Thickness", "Thickness", FindThickness)
         
         Set swFeature = Nothing
         Set swSheetMetal = Nothing
@@ -187,7 +189,7 @@ Set swFeature = Nothing
 FindThickness = 0
 
 End Function
-Sub UpdateExcel(strFilePath As String, strName As String, strMaterial As String, dblThickness As Double)
+Sub UpdateExcel(strFilePath As String, strName As String, strMaterial As String, strThickness As String)
 
 Dim xlWorkbook As Excel.Workbook
 Dim xlWorksheet As Excel.Worksheet
@@ -213,7 +215,7 @@ xlWorksheet.Cells(lngRow, 1) = lngRow - 1
 xlWorksheet.Cells(lngRow, 2) = strName
 xlWorksheet.Cells(lngRow, 3) = InputBox("How many?", strName, 1)
 xlWorksheet.Cells(lngRow, 4) = strMaterial
-xlWorksheet.Cells(lngRow, 5) = Format(dblThickness, "#0.0000") & Chr(34)
+xlWorksheet.Cells(lngRow, 5) = Format(strThickness, "#0.0000") & Chr(34)
 xlWorksheet.Cells(lngRow, 6) = InputBox("Procedure?", strName, "Laser")
 xlWorksheet.Cells(lngRow, 7) = InputBox("Bend?", strName, "")
 xlWorksheet.Cells(lngRow, 8) = InputBox("Our material?", strName, "")
