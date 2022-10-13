@@ -1,0 +1,201 @@
+Option Explicit
+Function GetExportFile(strFolder As String) As String
+
+    Dim strFileName As String
+    Dim strSourceFile As String
+
+    strFileName = strFolder & "\Cut List.xlsx"
+    strSourceFile = "C:\Users\farzad\Desktop\Macros\Cut List.xlsx"
+
+    If Dir(strFileName) = "" Then
+        Call FileCopy(strSourceFile, strFileName)
+    End If
+
+    GetExportFile = strFileName
+    
+End Function
+
+Function GetExportFolder(swModel As SldWorks.ModelDoc2) As String
+
+    Dim strDirectory As String
+    Dim strDirectoryArray() As String
+    Dim strProject As String
+    Dim strExportFolder As String
+
+
+    strDirectory = swModel.GetPathName()
+    strDirectoryArray = Split(strDirectory, "\")
+    strProject = Left(strDirectoryArray(2), 9)
+
+    strProject = InputBox("Project name?", "Project", strProject)
+
+    strExportFolder = GetSetting("Solidworks Macros", "ExportProfile", strProject)
+    If strExportFolder = "" Then
+        strExportFolder = strDirectoryArray(0) & "\" & strDirectoryArray(1) & "\" & strDirectoryArray(2) & "\" & strDirectoryArray(3) & "\" & strDirectoryArray(4)
+    
+        strExportFolder = InputBox("Project folder?", "Project", strExportFolder)
+    
+        Call SaveSetting("Solidworks Macros", "ExportProfile", strProject, strExportFolder)
+    End If
+
+    GetExportFolder = strExportFolder
+
+End Function
+Sub main()
+
+    Dim swApp As SldWorks.SldWorks
+    Dim swModel As SldWorks.ModelDoc2
+    Dim swPart As SldWorks.PartDoc
+    
+    Dim colCutListData As Collection
+    Dim strDirectory As String
+    Dim strFile As String
+
+
+    Set swApp = Application.SldWorks
+    Set swModel = swApp.ActiveDoc()
+    Set swPart = swModel
+
+    If swModel.LengthUnit = SwConst.swLengthUnit_e.swMM Then
+        Set colCutListData = GetCutListData(swPart)
+        strDirectory = GetExportFolder(swModel)
+        strFile = GetExportFile(strDirectory)
+        Call UpdateExcel(strFile, colCutListData)
+        
+        Call MsgBox("Export was successful", vbOKOnly, "Done")
+    Else
+        Call MsgBox("Change units to mm and try again.", vbOKOnly, "Error")
+    End If
+
+End Sub
+
+
+
+
+Sub UpdateExcel(strFile As String, colData As Collection)
+
+    Dim xlApp As Excel.Application
+    Dim xlWorkbook As Excel.Workbook
+    Dim xlWorksheet As Excel.Worksheet
+    Dim xlCell As Excel.Range
+
+    Dim lngRow As Long
+    Dim intFreeSpot As Integer
+    Dim itemData As Variant
+    Dim itemDataSplit() As String
+
+
+    Set xlApp = CreateObject("Excel.Application")
+    Set xlWorkbook = xlApp.Workbooks.Open(strFile)
+    Set xlWorksheet = xlWorkbook.Worksheets("Product")
+
+    Call xlApp.Wait(Now + TimeValue("0:00:05"))
+
+    For Each xlCell In xlWorksheet.Columns(1).Cells
+        If IsEmpty(xlCell) Then
+            lngRow = xlCell.Row
+            Exit For
+        End If
+    Next
+    
+    intFreeSpot = Val(InputBox("First Free Spot?", "Export", "1"))
+    
+    For Each itemData In colData
+        itemDataSplit = Split(itemData, ":")
+        
+        xlWorksheet.Cells(lngRow, 1) = lngRow - 1
+        xlWorksheet.Cells(lngRow, 2) = "PRO-" & Mid(itemDataSplit(0), 4, 4) & "-" & Format(intFreeSpot, "#0000")
+        xlWorksheet.Cells(lngRow, 3) = "Aluminum Profile (" & Mid(itemDataSplit(0), 4, 2) & "x" & Mid(itemDataSplit(0), 6, 2) & ") [L= " & itemDataSplit(1) & " mm]"
+        xlWorksheet.Cells(lngRow, 4) = 0
+        xlWorksheet.Cells(lngRow, 5) = 1
+        xlWorksheet.Cells(lngRow, 6) = "Consumable"
+        xlWorksheet.Cells(lngRow, 7) = "Mechanical Parts / Structural Parts / Profiles"
+        xlWorksheet.Cells(lngRow, 8) = xlWorksheet.Cells(lngRow, 2)
+        xlWorksheet.Cells(lngRow, 9) = "Katim"
+        xlWorksheet.Cells(lngRow, 10) = itemDataSplit(0)
+        xlWorksheet.Cells(lngRow, 11) = "SUPP"
+        xlWorksheet.Cells(lngRow, 12) = "http://katim.biz/2017/upload/images/products/aluminium/60x60L_3.png"
+        xlWorksheet.Cells(lngRow, 13) = "Dicsa Automatisation Inc"
+        xlWorksheet.Cells(lngRow, 14) = itemDataSplit(2)
+        
+        lngRow = lngRow + 1
+        intFreeSpot = intFreeSpot + 1
+    Next
+    
+    Call xlWorkbook.Save
+    Call xlWorkbook.Close
+
+    Set xlWorkbook = Nothing
+    Set xlWorksheet = Nothing
+    Set xlCell = Nothing
+    Set xlApp = Nothing
+
+End Sub
+
+Function FindFeature(swPart As SldWorks.PartDoc, strFeature As String) As Collection
+    
+    Dim swFeature As SldWorks.Feature
+    Dim colFoundFeature As New Collection
+
+    Set swFeature = swPart.FirstFeature
+    Do While Not swFeature Is Nothing
+        'Debug.Print (swFeature.Name & " : " & swFeature.GetTypeName2)
+        If swFeature.GetTypeName2 = strFeature Then
+            Call colFoundFeature.Add(swFeature)
+        End If
+        Set swFeature = swFeature.GetNextFeature
+    Loop
+    
+    Set FindFeature = colFoundFeature
+End Function
+
+
+Function GetCutListData(swPart As SldWorks.PartDoc) As Collection
+
+    Dim swCutListFeature As SldWorks.Feature
+    Dim swCutListPropertyManager As SldWorks.CustomPropertyManager
+    
+    Dim int_i As Integer
+    Dim int_j As Integer
+    Dim colCutList As Collection
+    Dim intPropertyCount As Integer
+    Dim varPropertyName As Variant
+    Dim varPropertyType As Variant
+    Dim varPropertyValue As Variant
+    Dim varPropertyState As Variant
+    Dim intLengthIndex As Integer
+    Dim intQuantityIndex As Integer
+    Dim intModelIndex As Integer
+    Dim colCutListData As New Collection
+    
+    
+    Set colCutList = FindFeature(swPart, "CutListFolder")
+    If Not IsEmpty(colCutList) Then
+        For int_i = 1 To colCutList.Count
+            Set swCutListFeature = colCutList(int_i)
+            'Debug.Print (swCutListFeature.Name)
+            
+            Set swCutListPropertyManager = swCutListFeature.CustomPropertyManager
+            intPropertyCount = swCutListPropertyManager.GetAll2(varPropertyName, varPropertyType, varPropertyValue, varPropertyState)
+            
+            If int_i = 1 Then
+                For int_j = 0 To intPropertyCount - 1
+                    If varPropertyName(int_j) = "LENGTH" Then
+                        intLengthIndex = int_j
+                    ElseIf varPropertyName(int_j) = "QUANTITY" Then
+                        intQuantityIndex = int_j
+                    ElseIf varPropertyName(int_j) = "SW-Part Number" Then
+                        intModelIndex = int_j
+                    End If
+                Next
+            End If
+            
+            If Val(varPropertyValue(intLengthIndex)) <> 0 Then
+                colCutListData.Add (varPropertyValue(intModelIndex) & ":" & varPropertyValue(intLengthIndex) & ":" & varPropertyValue(intQuantityIndex))
+            End If
+        Next
+    End If
+    
+    Set GetCutListData = colCutListData
+    
+End Function
