@@ -1,142 +1,159 @@
 Option Explicit
 
-Dim swApp As SldWorks.SldWorks
-Dim swModel As SldWorks.ModelDoc2
-Dim swModelExtension As SldWorks.ModelDocExtension
-
 Sub main()
 
-Dim swBOMFeature As SldWorks.BomFeature
-Dim swBOMTable As SldWorks.TableAnnotation
+    Dim swApp As SldWorks.SldWorks
+    Dim swModel As SldWorks.ModelDoc2
+    Dim swTable As SldWorks.TableAnnotation
+    
+    Dim colBOM As Collection
 
-Dim varBOMTables As Variant
-Dim strBOMTemplate As String
+    Set swApp = Application.SldWorks
+    Set swModel = swApp.ActiveDoc()
 
-Set swApp = Application.SldWorks
-Set swModel = swApp.ActiveDoc()
-Set swModelExtension = swModel.Extension()
-
-Set swBOMFeature = FindBOMFeature()
-If Not swBOMFeature Is Nothing Then
-    varBOMTables = swBOMFeature.GetTableAnnotations()
-    Set swBOMTable = varBOMTables(0)
-Else
-    strBOMTemplate = "Z:\Libraries & Templates\Standard Parts Library\BOM.sldbomtbt"
-    Set swBOMTable = swModelExtension.InsertBomTable3(strBOMTemplate, 0, 0, SwConst.swBomType_e.swBomType_PartsOnly, "Default", True, 0, False)
-End If
-
-Call swModel.ForceRebuild3(False)
-
-Call Export(swBOMTable)
-
-Call MsgBox("Export was successful", vbOKOnly, "Done")
+    Set swTable = GetTable(swModel)
+    Call UpdateExcel(swModel, swTable)
 
 End Sub
+Function FindFeature(swModel As SldWorks.ModelDoc2, strFeatureName As String) As Collection
+    
+    Dim swFeature As SldWorks.Feature
+    Dim colFoundFeature As New Collection
 
-Function FindBOMFeature() As SldWorks.BomFeature
+    Set swFeature = swModel.FirstFeature
+    Do While Not swFeature Is Nothing
+        'Debug.Print (swFeature.Name & " : " & swFeature.GetTypeName2)
+        If swFeature.GetTypeName2 = strFeatureName Then
+            Call colFoundFeature.Add(swFeature)
+        End If
+        Set swFeature = swFeature.GetNextFeature
+    Loop
+    
+    Set FindFeature = colFoundFeature
+    
+End Function
 
-Dim swFeature As SldWorks.Feature
+Function FindBOMFeature(swModel As SldWorks.ModelDoc2) As SldWorks.BomFeature
 
-swModel.ForceRebuild3 (False)
-
-Set swFeature = swModel.FirstFeature()
-
-Do While Not swFeature Is Nothing
-    If swFeature.GetTypeName2 = "TableFolder" Then
-        Set swFeature = swFeature.GetFirstSubFeature()
-        Do While Not swFeature Is Nothing
-            If swFeature.GetTypeName2 = "BomFeat" Then
-                Set FindBOMFeature = swFeature.GetSpecificFeature2()
-                Set swFeature = Nothing
-                Exit Function
+    Dim swFeature As SldWorks.Feature
+    Dim swSubFeature As SldWorks.Feature
+    
+    Dim colTableList As Collection
+    Dim colFoundBOM As New Collection
+    
+    Set FindBOMFeature = Nothing
+    
+    Set colTableList = FindFeature(swModel, "TableFolder")
+    If Not IsEmpty(colTableList) Then
+        Set swFeature = colTableList(1)
+        Set swSubFeature = swFeature.GetFirstSubFeature()
+        Do While Not swSubFeature Is Nothing
+            'Debug.Print (swSubFeature.Name & " : " & swSubFeature.GetTypeName2)
+            If swSubFeature.GetTypeName2 = "BomFeat" Then
+                Set FindBOMFeature = swSubFeature.GetSpecificFeature2()
+                Exit Do
             End If
-            Set swFeature = swFeature.GetNextSubFeature()
+            Set swSubFeature = swSubFeature.GetNextSubFeature()
         Loop
-    Else
-        Set swFeature = swFeature.GetNextFeature()
     End If
-Loop
 
-Set swFeature = Nothing
+End Function
+    
+
+Function GetTable(swModel As SldWorks.ModelDoc2) As SldWorks.TableAnnotation
+
+    Dim swBOMFeature As SldWorks.BomFeature
+    Dim swModelExtension As SldWorks.ModelDocExtension
+    Dim swBOMTableAnnotation As SldWorks.BomTableAnnotation
+    
+    Dim strTemplate As String
+    Dim varTableAnnotations As Variant
+    
+    Set swBOMFeature = FindBOMFeature(swModel)
+    If swBOMFeature Is Nothing Then
+        Set swModelExtension = swModel.Extension()
+
+        strTemplate = "Z:\Libraries & Templates\Standard Parts Library\BOM-Odoo.sldbomtbt"
+        Set swBOMTableAnnotation = swModelExtension.InsertBomTable3(strTemplate, 0, 0, SwConst.swBomType_e.swBomType_PartsOnly, "Default", True, 0, False)
+        Set GetTable = swBOMTableAnnotation
+        
+        Call MsgBox("BOM Table was added.", vbOKOnly, "Done")
+    Else
+        varTableAnnotations = swBOMFeature.GetTableAnnotations
+        Set GetTable = varTableAnnotations(0)
+    End If
+    
+       
+End Function
+
+Function GetExportFilePath(swModel As SldWorks.ModelDoc2) As String
+
+    'scripting.runtime
+    Dim fsoFSO As New FileSystemObject
+    
+    Dim strFolderPath As String
+    Dim strFilePath As String
+    Dim strSourceFilePath As String
+    
+    strFolderPath = fsoFSO.GetParentFolderName(swModel.GetPathName)
+    strFilePath = fsoFSO.BuildPath(strFolderPath, "\BOM.xlsx")
+    
+    strSourceFilePath = "C:\Users\farzad\Desktop\Macros\BOM.xlsx"
+    If Not fsoFSO.FileExists(strFilePath) Then
+        Call fsoFSO.CopyFile(strSourceFilePath, strFilePath, False)
+    End If
+
+    GetExportFilePath = strFilePath
+    
+    Set fsoFSO = Nothing
 
 End Function
 
-Sub Export(swBOMTable As SldWorks.TableAnnotation)
 
-Dim xlApp As Excel.Application
-Dim xlWorkbook As Excel.Workbook
-Dim xlWorksheet As Excel.Worksheet
-Dim xlCell As Excel.Range
+Sub UpdateExcel(swModel As SldWorks.ModelDoc2, swTable As SldWorks.TableAnnotation)
 
-Dim strFileName As String
-Dim intColumnIndex As Integer
-Dim intRowIndex As Integer
+    Dim xlApp As Excel.Application
+    Dim xlWorkbook As Excel.Workbook
+    Dim xlWorksheet As Excel.Worksheet
+    Dim xlCell As Excel.Range
 
-Set xlApp = CreateObject("Excel.Application")
-
-xlApp.DisplayAlerts = False
-
-Set xlWorkbook = xlApp.Workbooks.Add(Excel.XlWBATemplate.xlWBATWorksheet)
-strFileName = swApp.GetCurrentWorkingDirectory() & "BOM.xlsx"
-xlWorkbook.SaveAs (strFileName)
-
-Set xlWorksheet = xlWorkbook.Worksheets("Sheet1")
-
-For intColumnIndex = 0 To swBOMTable.ColumnCount() - 1
-    'Debug.Print (swBOMTable.GetColumnTitle(intColumnIndex))
-    xlWorksheet.Cells(1, intColumnIndex + 1) = swBOMTable.GetColumnTitle(intColumnIndex)
+    Dim strFilePath As String
+    Dim intRow As Integer
+    Dim intColumn As Integer
     
-    For intRowIndex = 1 To swBOMTable.RowCount() - 1
-        'Debug.Print (swBOMTable.Text(intRowIndex, intColumnIndex))
-        xlWorksheet.Cells(intRowIndex + 1, intColumnIndex + 1) = swBOMTable.Text(intRowIndex, intColumnIndex)
+    strFilePath = GetExportFilePath(swModel)
+
+    Set xlApp = CreateObject("Excel.Application")
+    xlApp.DisplayAlerts = False
+    
+    Set xlWorkbook = xlApp.Workbooks.Open(strFilePath)
+    Set xlWorksheet = xlWorkbook.Worksheets("BOM")
+
+    Call xlApp.Wait(Now + TimeValue("0:00:05"))
+    
+    For intRow = 1 To swTable.RowCount - 1
+    
+        xlWorksheet.Cells(intRow + 1, 1) = swTable.Text(intRow, 0)
+        xlWorksheet.Cells(intRow + 1, 2) = swTable.Text(intRow, 1)
+        xlWorksheet.Cells(intRow + 1, 3) = swTable.Text(intRow, 2)
+        xlWorksheet.Cells(intRow + 1, 4) = swTable.Text(intRow, 3)
+        xlWorksheet.Cells(intRow + 1, 5) = swTable.Text(intRow, 4)
+        xlWorksheet.Cells(intRow + 1, 6) = swTable.Text(intRow, 6)
+        xlWorksheet.Cells(intRow + 1, 7) = swTable.Text(intRow, 7)
+        xlWorksheet.Cells(intRow + 1, 8) = swTable.Text(intRow, 9)
+        
     Next
-Next
+    
+    Call xlWorkbook.Save
+    Call xlWorkbook.Close
+    
+    Call MsgBox("Export was successful", vbOKOnly, "Done")
 
-Call FormatExcel(xlWorksheet)
-
-xlWorkbook.Save
-xlWorkbook.Close
-
-Set xlApp = Nothing
-Set xlWorkbook = Nothing
-Set xlWorksheet = Nothing
-Set xlCell = Nothing
-
-
+    Set xlWorkbook = Nothing
+    Set xlWorksheet = Nothing
+    Set xlCell = Nothing
+    Set xlApp = Nothing
 
 End Sub
 
-Sub FormatExcel(xlWorksheet As Excel.Worksheet)
 
-Call xlWorksheet.Range("A1").AutoFilter
-
-xlWorksheet.Columns(1).ColumnWidth = 10
-xlWorksheet.Columns(2).ColumnWidth = 50
-xlWorksheet.Columns(3).ColumnWidth = 20
-xlWorksheet.Columns(4).ColumnWidth = 20
-xlWorksheet.Columns(5).ColumnWidth = 10
-xlWorksheet.Columns(6).ColumnWidth = 50
-xlWorksheet.Columns(7).ColumnWidth = 10
-xlWorksheet.Columns(8).ColumnWidth = 10
-xlWorksheet.Columns(9).ColumnWidth = 5
-
-xlWorksheet.Rows("1:1000").RowHeight = 20
-
-xlWorksheet.Columns("A:D").HorizontalAlignment = xlHAlignLeft
-xlWorksheet.Columns("E").HorizontalAlignment = xlHAlignCenter
-xlWorksheet.Columns("F:G").HorizontalAlignment = xlHAlignLeft
-xlWorksheet.Columns("H:I").HorizontalAlignment = xlHAlignRight
-
-xlWorksheet.Rows(1).HorizontalAlignment = xlHAlignCenter
-
-xlWorksheet.Rows(1).Font.Bold = True
-
-xlWorksheet.PageSetup.PrintArea = "A:I"
-xlWorksheet.PageSetup.Orientation = xlLandscape
-xlWorksheet.PageSetup.Zoom = False
-xlWorksheet.PageSetup.FitToPagesWide = 1
-xlWorksheet.PageSetup.FitToPagesTall = 1
-xlWorksheet.PageSetup.PrintGridlines = True
-xlWorksheet.PageSetup.CenterHorizontally = True
-
-End Sub
