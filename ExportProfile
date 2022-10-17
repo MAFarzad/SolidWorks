@@ -5,7 +5,7 @@ Function GetExportFile(strFolder As String) As String
     Dim strSourceFile As String
 
     strFileName = strFolder & "\Cut List.xlsx"
-    strSourceFile = "C:\Users\farzad\Desktop\Macros\Cut List.xlsx"
+    strSourceFile = "C:\Users\farzad\Desktop\Macros\Profile List.xlsx"
 
     If Dir(strFileName) = "" Then
         Call FileCopy(strSourceFile, strFileName)
