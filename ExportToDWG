@@ -1,230 +1,404 @@
 Option Explicit
 
-Dim swApp As SldWorks.SldWorks
-Dim swModel As SldWorks.ModelDoc2
-Dim swPart As SldWorks.PartDoc
+Function Export(swApp As SldWorks.SldWorks, swModel As SldWorks.ModelDoc2, swPart As SldWorks.PartDoc, strDWGPath As String) As Boolean
 
-Dim xlApp As Excel.Application
+    Dim dblAlignment(11) As Double
 
-
-Function Export(strDirectory As String, strName As String) As Boolean
- 
-Dim strDWGFile As String
-Dim dblAlignment(11) As Double
-
-strDWGFile = strDirectory & "\" & strName & ".dwg"
-
-dblAlignment(0) = 0
-dblAlignment(1) = 0
-dblAlignment(2) = 0
-dblAlignment(3) = 1
-dblAlignment(4) = 0
-dblAlignment(5) = 0
-dblAlignment(6) = 0
-dblAlignment(7) = 1
-dblAlignment(8) = 0
-dblAlignment(9) = 0
-dblAlignment(10) = 0
-dblAlignment(11) = 1
-
-Call swApp.RunCommand(SwCommands.swCommands_NormalTo, "")
-Export = swPart.ExportToDWG2(strDWGFile, swModel.GetPathName, SwConst.swExportToDWG_e.swExportToDWG_ExportSelectedFacesOrLoops, True, dblAlignment, False, False, 0, Null)
-
-
+    dblAlignment(0) = 0
+    dblAlignment(1) = 0
+    dblAlignment(2) = 0
+    dblAlignment(3) = 1
+    dblAlignment(4) = 0
+    dblAlignment(5) = 0
+    dblAlignment(6) = 0
+    dblAlignment(7) = 1
+    dblAlignment(8) = 0
+    dblAlignment(9) = 0
+    dblAlignment(10) = 0
+    dblAlignment(11) = 1
+    
+    Call swApp.RunCommand(SwCommands.swCommands_NormalTo, "")
+    Export = swPart.ExportToDWG2(strDWGPath, swModel.GetPathName, SwConst.swExportToDWG_e.swExportToDWG_ExportSelectedFacesOrLoops, True, dblAlignment, False, False, 0, Null)
+    
 End Function
 
-Function GetExportFolder() As String
-
-Dim strDirectory As String
-Dim strDirectoryArray() As String
-Dim strProject As String
-Dim strExportFolder As String
 
 
-strDirectory = swModel.GetPathName()
-strDirectoryArray = Split(strDirectory, "\")
-strProject = Left(strDirectoryArray(2), 9)
+Function GetExportFileData(swModel As SldWorks.ModelDoc2) As Collection
 
-strExportFolder = GetSetting("Solidworks Macros", "ExportToDWG", strProject)
-If strExportFolder = "" Then
-    strExportFolder = strDirectoryArray(0) & "\" & strDirectoryArray(1) & "\" & strDirectoryArray(2) & "\" & strDirectoryArray(3) & "\" & strDirectoryArray(4) & "\CBR Laser"
+    'scripting.runtime
+    Dim fsoFSO As New FileSystemObject
+    Dim colData As New Collection
     
-    If Dir(strExportFolder, vbDirectory) = "" Then
-        Call MkDir(strExportFolder)
+    Dim strModelPath As String
+    Dim strModelName As String
+    Dim strProjectName As String
+    Dim strExportFolderPath As String
+    Dim strDWGPath As String
+    Dim strExcelPath As String
+    Dim strSourceExcelPath As String
+    
+    strModelPath = swModel.GetPathName()
+    
+    strModelName = fsoFSO.GetBaseName(strModelPath)
+    strModelName = InputBox("File Name?", "Project", strModelName)
+    If strModelName = "" Then
+        Set GetExportFileData = Nothing
+        Exit Function
+    End If
+    colData.Add (strModelName)
+    
+    strProjectName = Left(strModelName, 9)
+    strProjectName = InputBox("Project Name?", "Project", strProjectName)
+    If strProjectName = "" Then
+        Set GetExportFileData = Nothing
+        Exit Function
     End If
     
-    Call SaveSetting("Solidworks Macros", "ExportToDWG", strProject, strExportFolder)
-End If
-
-GetExportFolder = strExportFolder
-
-End Function
-
-Sub main()
-
-Dim swModelExtension As SldWorks.ModelDocExtension
-Dim swSelectionManager As SldWorks.SelectionMgr
-
-Dim strDirectory As String
-Dim strName As String
-Dim bolExport As Boolean
-Dim strExcelFile As String
-Dim strMaterial As String
-Dim dblThickness As Double
-
-Set swApp = Application.SldWorks
-Set swModel = swApp.ActiveDoc()
-Set swModelExtension = swModel.Extension()
-Set swPart = swModel
-Set swSelectionManager = swModel.SelectionManager()
-
-If swSelectionManager.GetSelectedObjectCount2(0) = 1 And swSelectionManager.GetSelectedObjectType3(1, 0) = SwConst.swSelectType_e.swSelFACES Then
-    If swModel.LengthUnit = SwConst.swLengthUnit_e.swINCHES Then
-         
-        strDirectory = GetExportFolder()
-        strName = GetName()
+    
+    strExportFolderPath = GetSetting("Solidworks Macros", "ExportToDWG", strProjectName)
+    If strExportFolderPath = "" Then
+        strExportFolderPath = fsoFSO.BuildPath(fsoFSO.GetParentFolderName(strModelPath), "CBR Laser")
+        strExportFolderPath = InputBox("Export Folder?", "Project", strExportFolderPath)
+        If strExportFolderPath = "" Then
+            Set GetExportFileData = Nothing
+            Exit Function
+        End If
         
-        bolExport = Export(strDirectory, strName)
-        If bolExport Then
-            strExcelFile = CheckExcelFileExist(strDirectory)
+        Call SaveSetting("Solidworks Macros", "ExportToDWG", strProjectName, strExportFolderPath)
+    End If
+    colData.Add (strExportFolderPath)
+    
+    If Not fsoFSO.FolderExists(strExportFolderPath) Then
+        Call fsoFSO.CreateFolder(strExportFolderPath)
+    End If
+    
+    strDWGPath = fsoFSO.BuildPath(strExportFolderPath, strModelName & ".dwg")
+    colData.Add (strDWGPath)
+    
+    strExcelPath = fsoFSO.BuildPath(strExportFolderPath, "CBR List.xlsx")
+    strSourceExcelPath = "C:\Users\farzad\Desktop\Macros\CBR List.xlsx"
+    If Not fsoFSO.FileExists(strExcelPath) Then
+        Call fsoFSO.CopyFile(strSourceExcelPath, strExcelPath, False)
+    End If
+    colData.Add (strExcelPath)
+    
+    Set GetExportFileData = colData
+    
+    Set fsoFSO = Nothing
+    Set colData = Nothing
+    
+End Function
+'
+Sub main()
+    
+    Dim swApp As SldWorks.SldWorks
+    Dim swModel As SldWorks.ModelDoc2
+    Dim swPart As SldWorks.PartDoc
+    Dim swSelectionManager As SldWorks.SelectionMgr
+    
+    Dim colExportFileData As Collection
+    Dim colPartData As Collection
+    
+    Dim strDWGPath As String
+    Dim bolExport As Boolean
+    
+    
+'
+
+
+'
+'Dim swModelExtension As SldWorks.ModelDocExtension
+
+'
+'
+    Set swApp = Application.SldWorks
+    Set swModel = swApp.ActiveDoc()
+'Set swModelExtension = swModel.Extension()
+    Set swPart = swModel
+    Set swSelectionManager = swModel.SelectionManager()
+    
+    
+    
+    If swSelectionManager.GetSelectedObjectCount2(0) = 1 And swSelectionManager.GetSelectedObjectType3(1, 0) = SwConst.swSelectType_e.swSelFACES Then
+        
+        If swModel.LengthUnit = SwConst.swLengthUnit_e.swINCHES Then
+            Set colExportFileData = GetExportFileData(swModel)
             
-            strMaterial = GetMaterial()
-            dblThickness = FindThickness()
+            If Not colExportFileData Is Nothing Then
+                strDWGPath = colExportFileData(3)
+                bolExport = Export(swApp, swModel, swPart, strDWGPath)
+                
+                If bolExport Then
+                    Set colPartData = GetPartData(swPart)
+                    
+                    If Not colPartData Is Nothing Then
+                        Call UpdateExcel(colExportFileData, colPartData)
+                    Else
+                        Call MsgBox("Terminated by user.", vbOKOnly + vbExclamation, "End")
+                    End If
+
+                Else
+                    Call MsgBox("Export was failed", vbOKOnly + vbCritical, "Fail")
+                End If
+                
+            Else
+                Call MsgBox("Terminated by user.", vbOKOnly + vbExclamation, "End")
+            End If
             
-            Call UpdateExcel(strExcelFile, strName, strMaterial, dblThickness)
-            
-            Call MsgBox("Export was successful", vbOKOnly, "Done")
+        Else
+            Call MsgBox("Change units to inch and try again.", vbOKOnly, "Error")
         End If
     Else
-        Call MsgBox("Change units to inch and try again.", vbOKOnly, "Error")
+        Call MsgBox("Select only one face and try again.", vbOKOnly, "Error")
     End If
-Else
-    Call MsgBox("Select only one face and try again.", vbOKOnly, "Error")
-End If
 
 End Sub
 
-Function GetName() As String
+Function GetMaterial(swPart As SldWorks.PartDoc) As String
 
-Dim strNameComplete As String
-Dim strNameCompleteArray() As String
+    Dim strMaterialDetails As String
+    Dim strMaterialDetailsArray() As String
 
-
-strNameComplete = swModel.GetTitle()
-strNameCompleteArray = Split(strNameComplete, ".")
-GetName = InputBox("Name?", , strNameCompleteArray(0))
-        
-End Function
-Function GetMaterial() As String
-
-Dim strMaterialDetails As String
-Dim strMaterialDetailsArray() As String
-
-strMaterialDetails = swPart.MaterialIdName()
-strMaterialDetailsArray = Split(strMaterialDetails, "|")
-GetMaterial = strMaterialDetailsArray(1)
-        
-End Function
-
-
-Function CheckExcelFileExist(strDirectory As String) As String
-
-Dim strFileName As String
-Dim strSourceFile As String
-
-strFileName = strDirectory & "\Part List.xlsx"
-strSourceFile = "C:\Users\farzad\Desktop\Macros\Part List.xlsx"
-
-If Dir(strFileName) = "" Then
-    Call FileCopy(strSourceFile, strFileName)
-End If
-
-CheckExcelFileExist = strFileName
+    strMaterialDetails = swPart.MaterialIdName()
+    strMaterialDetailsArray = Split(strMaterialDetails, "|")
+    GetMaterial = strMaterialDetailsArray(1)
 
 End Function
 
 
-
-
-Function FindThickness() As Double
-
-Dim swFeature As SldWorks.Feature
-Dim swExtrude As SldWorks.ExtrudeFeatureData2
-Dim swSheetMetal As SldWorks.SheetMetalFeatureData
-
-Dim strType As String
-
-Set swFeature = swPart.FirstFeature
-
-Do While Not swFeature Is Nothing
-    Debug.Print (swFeature.Name & " : " & swFeature.GetTypeName2)
+Function GetPartData(swPart As SldWorks.PartDoc) As Collection
     
-    strType = swFeature.GetTypeName2
-     
-    If swFeature.GetTypeName2 = "Extrusion" Or swFeature.GetTypeName2 = "ExtruThin" Then
-        Set swExtrude = swFeature.GetDefinition()
-        FindThickness = (swExtrude.GetDepth(True) + swExtrude.GetDepth(False)) / 0.0254
-        
-        Set swFeature = Nothing
-        Set swExtrude = Nothing
-        
-        Exit Function
-    ElseIf swFeature.GetTypeName2 = "SheetMetal" Then
-        Set swSheetMetal = swFeature.GetDefinition()
-        FindThickness = swSheetMetal.Thickness() / 0.0254
-        
-        Set swFeature = Nothing
-        Set swSheetMetal = Nothing
-        
+    Dim colData As New Collection
+    
+    Dim strQuantity As String
+    Dim strMaterial As String
+    Dim StrThickness As String
+    Dim strCut As String
+    Dim intBend As Integer
+    Dim intMaterialProvided As Integer
+    Dim intPaint As Integer
+    Dim strDescription As String
+    
+    strQuantity = InputBox("Quantity?", "Quantity", "1")
+    If strQuantity = "" Then
+        Set GetPartData = Nothing
         Exit Function
     End If
+    colData.Add (strQuantity)
     
-    Set swFeature = swFeature.GetNextFeature
-Loop
+    strMaterial = GetMaterial(swPart)
+    If strMaterial = "" Then
+        Set GetPartData = Nothing
+        Exit Function
+    End If
+    colData.Add (strMaterial)
+    
+    StrThickness = GetThickness(swPart)
+    If StrThickness = "" Then
+        Set GetPartData = Nothing
+        Exit Function
+    End If
+    colData.Add (Format(StrThickness, "#0.0000") & Chr(34))
+    
+    strCut = InputBox("Cut type?", "Cut", "Laser")
+    If strCut = "" Then
+        Set GetPartData = Nothing
+        Exit Function
+    End If
+    colData.Add (strCut)
+    
+    intBend = MsgBox("Should be bent?", vbYesNoCancel, "Bend")
+    If intBend = vbCancel Then
+        Set GetPartData = Nothing
+        Exit Function
+    ElseIf intBend = vbYes Then
+        colData.Add ("X")
+    Else
+        colData.Add ("")
+    End If
+    
+    intMaterialProvided = MsgBox("Do we provide the material?", vbYesNoCancel, "Material Provided")
+    If intMaterialProvided = vbCancel Then
+        Set GetPartData = Nothing
+        Exit Function
+    ElseIf intMaterialProvided = vbYes Then
+        colData.Add ("X")
+    Else
+        colData.Add ("")
+    End If
+    
+    intPaint = MsgBox("Should be painted?", vbYesNoCancel, "Paint")
+    If intPaint = vbCancel Then
+        Set GetPartData = Nothing
+        Exit Function
+    ElseIf intPaint = vbYes Then
+        colData.Add ("X")
+    Else
+        colData.Add ("")
+    End If
 
-Set swFeature = Nothing
+    Set GetPartData = colData
+        
+End Function
 
-FindThickness = 0
+Function GetThickness(swPart As SldWorks.PartDoc) As String
+
+    Dim swFeature As SldWorks.Feature
+    Dim swExtrude As SldWorks.ExtrudeFeatureData2
+    Dim swSheetMetal As SldWorks.SheetMetalFeatureData
+    
+    Dim strFeatureType As String
+    Dim dblThickness As Double
+
+    Set swFeature = swPart.FirstFeature
+    Do While Not swFeature Is Nothing
+        'Debug.Print (swFeature.Name & " : " & swFeature.GetTypeName2)
+
+        strFeatureType = swFeature.GetTypeName2
+        If strFeatureType = "Extrusion" Or strFeatureType = "ExtruThin" Then
+            Set swExtrude = swFeature.GetDefinition()
+            dblThickness = (swExtrude.GetDepth(True) + swExtrude.GetDepth(False))
+            Exit Do
+        ElseIf strFeatureType = "SheetMetal" Then
+            Set swSheetMetal = swFeature.GetDefinition()
+            dblThickness = swSheetMetal.Thickness()
+            Exit Do
+        End If
+
+        Set swFeature = swFeature.GetNextFeature
+    Loop
+    
+    dblThickness = dblThickness / 0.0254
+    
+    GetThickness = InputBox("Check Thickness", "Thickness", dblThickness)
 
 End Function
-Sub UpdateExcel(strFilePath As String, strName As String, strMaterial As String, dblThickness As Double)
 
-Dim xlWorkbook As Excel.Workbook
-Dim xlWorksheet As Excel.Worksheet
-Dim xlCell As Excel.Range
+Function GetEmptyRow(xlWorksheet As Excel.Worksheet, intColumnIndex As Integer) As Integer
 
-Dim lngRow As Long
+    Dim xlCell As Excel.Range
 
-Set xlApp = CreateObject("Excel.Application")
+    For Each xlCell In xlWorksheet.Columns(intColumnIndex).Cells
+        If IsEmpty(xlCell) Then
+            GetEmptyRow = xlCell.Row
+            Exit For
+        End If
+    Next
 
-Set xlWorkbook = xlApp.Workbooks.Open(strFilePath)
-Set xlWorksheet = xlWorkbook.Worksheets("Sheet1")
+End Function
 
-Call xlApp.Wait(Now + TimeValue("0:00:02"))
+Function GetDuplication(xlWorksheet As Excel.Worksheet, intColumnIndex As Integer, intLastRowIndex, strItem As String) As Integer
+    
+    Dim xlCells As Excel.Range
+    Dim xlCell As Excel.Range
+    
+    Dim intRowIndex As Integer
+    
+    Set xlCells = xlWorksheet.Columns(intColumnIndex).Cells
 
-For Each xlCell In xlWorksheet.Columns(1).Cells
-    If IsEmpty(xlCell) Then
-        lngRow = xlCell.Row
-        Exit For
+    For intRowIndex = 2 To intLastRowIndex
+        Set xlCell = xlWorksheet.Cells(intRowIndex, intColumnIndex)
+        
+        If xlCell = strItem Then
+            GetDuplication = xlCell.Row
+            Exit Function
+        End If
+        
+    Next
+    
+    GetDuplication = 0
+
+End Function
+
+Function UpdateExcel(colExportFileData As Collection, colPartData As Collection)
+
+    Dim xlApp As Excel.Application
+    Dim xlWorkbook As Excel.Workbook
+    Dim xlWorksheet As Excel.Worksheet
+    Dim xlCell As Excel.Range
+    
+    Dim intEmptyRowIndex As Integer
+    Dim intDuplicatedRowIndex As Integer
+    Dim intCurrentRowIndex As Integer
+    Dim intFreeSpot As Integer
+    Dim strMaterialSpec As String
+    Dim strThicknessSpec As String
+    Dim strProcesSpec As String
+
+'
+'Dim xlWorkbook As Excel.Workbook
+'Dim xlWorksheet As Excel.Worksheet
+'Dim xlCell As Excel.Range
+'
+'Dim lngRow As Long
+'
+    Set xlApp = CreateObject("Excel.Application")
+    xlApp.DisplayAlerts = False
+
+    Set xlWorkbook = xlApp.Workbooks.Open(colExportFileData(4))
+    Call xlApp.Wait(Now + TimeValue("0:00:02"))
+    
+    Set xlWorksheet = xlWorkbook.Worksheets("BOM")
+    
+    intEmptyRowIndex = GetEmptyRow(xlWorksheet, 2)
+    
+    intDuplicatedRowIndex = GetDuplication(xlWorksheet, 2, intEmptyRowIndex - 1, colExportFileData(1))
+    If intDuplicatedRowIndex = 0 Then
+        intCurrentRowIndex = intEmptyRowIndex
+    Else
+        intCurrentRowIndex = intDuplicatedRowIndex
     End If
-Next
+    
+    intFreeSpot = Val(InputBox("First Odoo free spot?", "Odoo", "1"))
+    
+    strMaterialSpec = "Material: " & colPartData(2)
+    If colPartData(6) = "X" Then
+        strMaterialSpec = strMaterialSpec & " (Provided by the Client))"
+    End If
+    
+    strThicknessSpec = "Thickness: " & colPartData(3)
+    
+    strProcesSpec = "Process: " & colPartData(4)
+    If colPartData(5) = "X" Then
+        strProcesSpec = strProcesSpec & " + Bend"
+    End If
 
-xlWorksheet.Cells(lngRow, 1) = lngRow - 1
-xlWorksheet.Cells(lngRow, 2) = strName
-xlWorksheet.Cells(lngRow, 3) = InputBox("How many?", strName, 1)
-xlWorksheet.Cells(lngRow, 4) = strMaterial
-xlWorksheet.Cells(lngRow, 5) = Format(dblThickness, "#0.0000") & Chr(34)
-xlWorksheet.Cells(lngRow, 6) = InputBox("Procedure?", strName, "Laser")
-xlWorksheet.Cells(lngRow, 7) = InputBox("Bend?", strName, "")
-xlWorksheet.Cells(lngRow, 8) = InputBox("Our material?", strName, "")
-xlWorksheet.Cells(lngRow, 9) = InputBox("Description?", strName, "Painted-Ali")
-
-Call xlWorkbook.Save
-Call xlWorkbook.Close
-
-Set xlWorkbook = Nothing
-Set xlWorksheet = Nothing
-Set xlCell = Nothing
-Set xlApp = Nothing
-
-End Sub
+    
+    xlWorksheet.Cells(intCurrentRowIndex, 1) = "CBR-" & Format(intFreeSpot, "#0000")
+    xlWorksheet.Cells(intCurrentRowIndex, 2) = colExportFileData(1)
+    xlWorksheet.Cells(intCurrentRowIndex, 3) = colPartData(1)
+    xlWorksheet.Cells(intCurrentRowIndex, 4) = colPartData(2)
+    xlWorksheet.Cells(intCurrentRowIndex, 5) = colPartData(3)
+    xlWorksheet.Cells(intCurrentRowIndex, 6) = colPartData(4)
+    xlWorksheet.Cells(intCurrentRowIndex, 7) = colPartData(5)
+    xlWorksheet.Cells(intCurrentRowIndex, 8) = colPartData(6)
+    xlWorksheet.Cells(intCurrentRowIndex, 9) = colPartData(7)
+    
+    xlWorksheet.Cells(intCurrentRowIndex, 10) = colExportFileData(1) & vbCrLf & strMaterialSpec & vbCrLf & strThicknessSpec & vbCrLf & strProcesSpec
+    xlWorksheet.Cells(intCurrentRowIndex, 11) = colExportFileData(1) & ", " & strMaterialSpec & ", " & strThicknessSpec & ", " & strProcesSpec
+    xlWorksheet.Cells(intCurrentRowIndex, 12) = colExportFileData(3)
+    xlWorksheet.Cells(intCurrentRowIndex, 13) = colExportFileData(3) 'png
+    
+    xlWorksheet.Cells(intCurrentRowIndex, 14) = "CBR Laser"
+    xlWorksheet.Cells(intCurrentRowIndex, 15) = "CBR Laser"
+    xlWorksheet.Cells(intCurrentRowIndex, 16) = "CBR"
+    xlWorksheet.Cells(intCurrentRowIndex, 17) = 0
+    xlWorksheet.Cells(intCurrentRowIndex, 18) = 1
+    xlWorksheet.Cells(intCurrentRowIndex, 19) = "Storable Product"
+    xlWorksheet.Cells(intCurrentRowIndex, 20) = "Mechanical Parts / CBR Laser"
+    xlWorksheet.Cells(intCurrentRowIndex, 21) = 0
+    xlWorksheet.Cells(intCurrentRowIndex, 22) = 0
+    
+        
+    Call xlWorkbook.Save
+    Call xlWorkbook.Close
+    
+    Call MsgBox("Excel was updated", vbOKOnly, "Done")
+    
+    Set xlCell = Nothing
+    Set xlWorksheet = Nothing
+    Set xlWorkbook = Nothing
+    Set xlApp = Nothing
+    
+End Function
