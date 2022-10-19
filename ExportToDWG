@@ -313,7 +313,7 @@ Function UpdateExcel(colExportFileData As Collection, colPartData As Collection)
     Dim strMaterialSpec As String
     Dim strThicknessSpec As String
     Dim strProcesSpec As String
-
+    Dim strPaintSpec As String
 
     Set xlApp = CreateObject("Excel.Application")
     xlApp.DisplayAlerts = False
@@ -346,6 +346,10 @@ Function UpdateExcel(colExportFileData As Collection, colPartData As Collection)
         strProcesSpec = strProcesSpec & " + Bend"
     End If
 
+    strPaintSpec = ""
+    If colPartData(7) = "X" Then
+        strPaintSpec = strPaintSpec & "Paint"
+    End If
     
     xlWorksheet.Cells(intCurrentRowIndex, 1) = "CBR-" & Format(intFreeSpot, "#0000")
     xlWorksheet.Cells(intCurrentRowIndex, 2) = colExportFileData(1)
@@ -357,7 +361,7 @@ Function UpdateExcel(colExportFileData As Collection, colPartData As Collection)
     xlWorksheet.Cells(intCurrentRowIndex, 8) = colPartData(6)
     xlWorksheet.Cells(intCurrentRowIndex, 9) = colPartData(7)
     
-    xlWorksheet.Cells(intCurrentRowIndex, 10) = strMaterialSpec & vbCrLf & strThicknessSpec & vbCrLf & strProcesSpec & vbCrLf & vbCrLf & colExportFileData(2)
+    xlWorksheet.Cells(intCurrentRowIndex, 10) = strMaterialSpec & vbCrLf & strThicknessSpec & vbCrLf & strProcesSpec & vbCrLf & strPaintSpec & vbCrLf & vbCrLf & colExportFileData(3)
     xlWorksheet.Cells(intCurrentRowIndex, 11) = colExportFileData(1) & ", " & strMaterialSpec & ", " & strThicknessSpec & ", " & strProcesSpec
     
     xlWorksheet.Cells(intCurrentRowIndex, 12) = "https://www.cbrlaser.com/images/cbr-laser-logo.png"
