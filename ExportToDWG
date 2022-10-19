@@ -103,23 +103,11 @@ Sub main()
     Dim strDWGPath As String
     Dim bolExport As Boolean
     
-    
-'
-
-
-'
-'Dim swModelExtension As SldWorks.ModelDocExtension
-
-'
-'
     Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc()
-'Set swModelExtension = swModel.Extension()
     Set swPart = swModel
     Set swSelectionManager = swModel.SelectionManager()
-    
-    
-    
+        
     If swSelectionManager.GetSelectedObjectCount2(0) = 1 And swSelectionManager.GetSelectedObjectType3(1, 0) = SwConst.swSelectType_e.swSelFACES Then
         
         If swModel.LengthUnit = SwConst.swLengthUnit_e.swINCHES Then
@@ -326,13 +314,7 @@ Function UpdateExcel(colExportFileData As Collection, colPartData As Collection)
     Dim strThicknessSpec As String
     Dim strProcesSpec As String
 
-'
-'Dim xlWorkbook As Excel.Workbook
-'Dim xlWorksheet As Excel.Worksheet
-'Dim xlCell As Excel.Range
-'
-'Dim lngRow As Long
-'
+
     Set xlApp = CreateObject("Excel.Application")
     xlApp.DisplayAlerts = False
 
@@ -375,20 +357,19 @@ Function UpdateExcel(colExportFileData As Collection, colPartData As Collection)
     xlWorksheet.Cells(intCurrentRowIndex, 8) = colPartData(6)
     xlWorksheet.Cells(intCurrentRowIndex, 9) = colPartData(7)
     
-    xlWorksheet.Cells(intCurrentRowIndex, 10) = colExportFileData(1) & vbCrLf & strMaterialSpec & vbCrLf & strThicknessSpec & vbCrLf & strProcesSpec
+    xlWorksheet.Cells(intCurrentRowIndex, 10) = strMaterialSpec & vbCrLf & strThicknessSpec & vbCrLf & strProcesSpec & vbCrLf & vbCrLf & colExportFileData(2)
     xlWorksheet.Cells(intCurrentRowIndex, 11) = colExportFileData(1) & ", " & strMaterialSpec & ", " & strThicknessSpec & ", " & strProcesSpec
-    xlWorksheet.Cells(intCurrentRowIndex, 12) = colExportFileData(3)
-    xlWorksheet.Cells(intCurrentRowIndex, 13) = colExportFileData(3) 'png
     
+    xlWorksheet.Cells(intCurrentRowIndex, 12) = "https://www.cbrlaser.com/images/cbr-laser-logo.png"
+    xlWorksheet.Cells(intCurrentRowIndex, 13) = "CBR Laser"
     xlWorksheet.Cells(intCurrentRowIndex, 14) = "CBR Laser"
-    xlWorksheet.Cells(intCurrentRowIndex, 15) = "CBR Laser"
-    xlWorksheet.Cells(intCurrentRowIndex, 16) = "CBR"
-    xlWorksheet.Cells(intCurrentRowIndex, 17) = 0
-    xlWorksheet.Cells(intCurrentRowIndex, 18) = 1
-    xlWorksheet.Cells(intCurrentRowIndex, 19) = "Storable Product"
-    xlWorksheet.Cells(intCurrentRowIndex, 20) = "Mechanical Parts / CBR Laser"
+    xlWorksheet.Cells(intCurrentRowIndex, 15) = "CBR"
+    xlWorksheet.Cells(intCurrentRowIndex, 16) = 0
+    xlWorksheet.Cells(intCurrentRowIndex, 17) = 1
+    xlWorksheet.Cells(intCurrentRowIndex, 18) = "Storable Product"
+    xlWorksheet.Cells(intCurrentRowIndex, 19) = "Mechanical Parts / CBR Laser"
+    xlWorksheet.Cells(intCurrentRowIndex, 20) = 0
     xlWorksheet.Cells(intCurrentRowIndex, 21) = 0
-    xlWorksheet.Cells(intCurrentRowIndex, 22) = 0
     
         
     Call xlWorkbook.Save
