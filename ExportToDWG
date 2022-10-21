@@ -25,28 +25,44 @@ End Function
 
 
 Function GetExportFileData(swModel As SldWorks.ModelDoc2) As Collection
-
+    
+    Dim swConfigurationManager As SldWorks.ConfigurationManager
+    Dim swConfiguration As SldWorks.Configuration
+    Dim swCustomPropertyManager As SldWorks.CustomPropertyManager
+    
     'scripting.runtime
     Dim fsoFSO As New FileSystemObject
     Dim colData As New Collection
     
     Dim strModelPath As String
     Dim strModelName As String
+    Dim strConfigurationName As String
+    Dim strExportName As String
     Dim strProjectName As String
     Dim strExportFolderPath As String
     Dim strDWGPath As String
     Dim strExcelPath As String
     Dim strSourceExcelPath As String
+    Dim strCodeOriginal As String
+    Dim strCode As String
     
     strModelPath = swModel.GetPathName()
     
     strModelName = fsoFSO.GetBaseName(strModelPath)
-    strModelName = InputBox("File Name?", "Project", strModelName)
-    If strModelName = "" Then
+    Set swConfigurationManager = swModel.ConfigurationManager()
+    Set swConfiguration = swConfigurationManager.ActiveConfiguration()
+    strConfigurationName = swConfiguration.Name()
+    If strConfigurationName = "Default" Then
+        strExportName = strModelName
+    Else
+        strExportName = strModelName & " (" & strConfigurationName & ")"
+    End If
+    strExportName = InputBox("File Name?", "Project", strExportName)
+    If strExportName = "" Then
         Set GetExportFileData = Nothing
         Exit Function
     End If
-    colData.Add (strModelName)
+    colData.Add (strExportName) '1
     
     strProjectName = Left(strModelName, 9)
     strProjectName = InputBox("Project Name?", "Project", strProjectName)
@@ -67,21 +83,36 @@ Function GetExportFileData(swModel As SldWorks.ModelDoc2) As Collection
         
         Call SaveSetting("Solidworks Macros", "ExportToDWG", strProjectName, strExportFolderPath)
     End If
-    colData.Add (strExportFolderPath)
+    colData.Add (strExportFolderPath) '2
     
     If Not fsoFSO.FolderExists(strExportFolderPath) Then
         Call fsoFSO.CreateFolder(strExportFolderPath)
     End If
     
-    strDWGPath = fsoFSO.BuildPath(strExportFolderPath, strModelName & ".dwg")
-    colData.Add (strDWGPath)
+    strDWGPath = fsoFSO.BuildPath(strExportFolderPath, strExportName & ".dwg")
+    colData.Add (strDWGPath) '3
     
     strExcelPath = fsoFSO.BuildPath(strExportFolderPath, "CBR List.xlsx")
     strSourceExcelPath = "C:\Users\farzad\Desktop\Macros\CBR List.xlsx"
     If Not fsoFSO.FileExists(strExcelPath) Then
         Call fsoFSO.CopyFile(strSourceExcelPath, strExcelPath, False)
     End If
-    colData.Add (strExcelPath)
+    colData.Add (strExcelPath) '4
+    
+    Set swCustomPropertyManager = swConfiguration.CustomPropertyManager()
+    Call swCustomPropertyManager.Get5("RDS Code", True, strCodeOriginal, "", True)
+    If strCodeOriginal = "" Then
+        strCode = InputBox("Odoo Code?", "Code", "CBR-")
+    Else
+        strCode = InputBox("Odoo Code?", "Code", strCodeOriginal)
+    End If
+    If strCode = "" Then
+        Set GetExportFileData = Nothing
+        Exit Function
+    ElseIf strCode <> strCodeOriginal Then
+        Call swCustomPropertyManager.Set2("RDS Code", strCode)
+    End If
+    colData.Add (strCode) '5
     
     Set GetExportFileData = colData
     
@@ -89,7 +120,7 @@ Function GetExportFileData(swModel As SldWorks.ModelDoc2) As Collection
     Set colData = Nothing
     
 End Function
-'
+
 Sub main()
     
     Dim swApp As SldWorks.SldWorks
@@ -309,7 +340,6 @@ Function UpdateExcel(colExportFileData As Collection, colPartData As Collection)
     Dim intEmptyRowIndex As Integer
     Dim intDuplicatedRowIndex As Integer
     Dim intCurrentRowIndex As Integer
-    Dim intFreeSpot As Integer
     Dim strMaterialSpec As String
     Dim strThicknessSpec As String
     Dim strProcesSpec As String
@@ -331,9 +361,7 @@ Function UpdateExcel(colExportFileData As Collection, colPartData As Collection)
     Else
         intCurrentRowIndex = intDuplicatedRowIndex
     End If
-    
-    intFreeSpot = Val(InputBox("First Odoo free spot?", "Odoo", "1"))
-    
+        
     strMaterialSpec = "Material: " & colPartData(2)
     If colPartData(6) = "X" Then
         strMaterialSpec = strMaterialSpec & " (Provided by the Client))"
@@ -351,7 +379,7 @@ Function UpdateExcel(colExportFileData As Collection, colPartData As Collection)
         strPaintSpec = strPaintSpec & "Paint"
     End If
     
-    xlWorksheet.Cells(intCurrentRowIndex, 1) = "CBR-" & Format(intFreeSpot, "#0000")
+    xlWorksheet.Cells(intCurrentRowIndex, 1) = colExportFileData(5)
     xlWorksheet.Cells(intCurrentRowIndex, 2) = colExportFileData(1)
     xlWorksheet.Cells(intCurrentRowIndex, 3) = colPartData(1)
     xlWorksheet.Cells(intCurrentRowIndex, 4) = colPartData(2)
