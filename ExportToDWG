@@ -275,7 +275,7 @@ Function GetThickness(swPart As SldWorks.PartDoc) As String
         'Debug.Print (swFeature.Name & " : " & swFeature.GetTypeName2)
 
         strFeatureType = swFeature.GetTypeName2
-        If strFeatureType = "Extrusion" Or strFeatureType = "ExtruThin" Then
+        If strFeatureType = "Extrusion" Or strFeatureType = "ExtruThin" Or strFeatureType = "ICE" Then
             Set swExtrude = swFeature.GetDefinition()
             dblThickness = (swExtrude.GetDepth(True) + swExtrude.GetDepth(False))
             Exit Do
